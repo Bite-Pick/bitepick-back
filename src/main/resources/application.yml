@@ -75,7 +75,7 @@ management:
     web:
       base-path: /actuator
       exposure:
-        include: health, prometheus
+        include: health
   endpoint:
     health:
       show-details: always
@@ -134,7 +134,7 @@ management:
     web:
       base-path: /actuator
       exposure:
-        include: health, prometheus
+        include: health
   endpoint:
     health:
       show-details: when-authorized
@@ -174,3 +174,7 @@ management:
   endpoint:
     health:
       show-details: never
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
