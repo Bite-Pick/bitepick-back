@@ -39,7 +39,7 @@ public class FcmTokenRepositoryImpl implements FcmTokenRepositoryCustom {
     @Override
     public long countByStoreId(final Long storeId) {
         Long count = queryFactory
-                .select(fcmToken.id.count())
+                .select(fcmToken.user.id.countDistinct())
                 .from(fcmToken)
                 .where(fcmToken.store.id.eq(storeId))
                 .fetchOne();

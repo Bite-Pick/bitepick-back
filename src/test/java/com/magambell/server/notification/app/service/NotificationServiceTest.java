@@ -179,7 +179,22 @@ class NotificationServiceTest {
         assertThat(subscriberCount).isEqualTo(2L);
     }
 
-    @DisplayName("매장 오픈 알림 신청자 수는 ACTIVE 여부와 관계없이 token row 기준으로 집계한다.")
+    @DisplayName("매장 오픈 알림 신청자 수는 중복 token row가 있어도 user 기준으로 집계한다.")
+    @Test
+    void getStoreOpenSubscriberCountDistinctUsers() {
+        // given
+        notificationService.saveStoreOpenToken(
+                new SaveStoreOpenFcmTokenServiceRequest(store.getId(), "token-1", user.getId()));
+        fcmTokenRepository.save(FcmToken.create("token-duplicate", user, store));
+
+        // when
+        long subscriberCount = notificationService.getStoreOpenSubscriberCount(store.getId());
+
+        // then
+        assertThat(subscriberCount).isEqualTo(1L);
+    }
+
+    @DisplayName("매장 오픈 알림 신청자 수는 ACTIVE 여부와 관계없이 user 기준으로 집계한다.")
     @Test
     void getStoreOpenSubscriberCountIncludesWithdrawnUser() {
         // given
