@@ -1,0 +1,85 @@
+# ================================================================ #
+#                       🐰 CodeRabbit 설정                          #
+# ================================================================ #
+
+# 리뷰 언어
+language: "ko-KR"
+
+# 리뷰 톤
+tone_instructions: >
+  문제를 지적할 때는 원인과 이유까지 설명하고, 가능하면 공식 문서나
+  레퍼런스를 함께 제시해주세요. 잘한 부분은 가볍게 칭찬하고,
+  함께 성장하는 동료 개발자의 말투로 피드백해주세요.
+
+reviews:
+  # quiet / chill / assertive
+  profile: "chill"
+
+  request_changes_workflow: false
+
+  # 요약 관련
+  high_level_summary: true
+  changed_files_summary: true
+  collapse_walkthrough: true 
+  sequence_diagrams: true 
+  assess_linked_issues: true
+
+  poem: true
+
+  # 자동화 계열
+  related_issues: false
+  related_prs: true
+  suggested_labels: false
+  auto_apply_labels: false
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    
+    base_branches:
+      - "main"
+      - "dev"
+
+  # 리뷰 대상에서 제외할 경로
+  path_filters:
+    - "!**/build/**"
+    - "!**/.gradle/**"
+    - "!gradle/wrapper/**"
+    - "!gradlew"
+    - "!gradlew.bat"
+    - "!**/*.jar"
+    - "!**/generated/**"
+
+  # 경로별 리뷰 관점 지정
+  path_instructions:
+    - path: "src/main/java/**/*.java"
+      instructions: >
+        Spring Boot 컨벤션을 기준으로 봐주세요. 레이어 책임 분리(Controller는
+        요청/응답 변환만, 비즈니스 로직은 Service), 생성자 주입 사용,
+        Entity를 API 응답으로 그대로 노출하지 않는지, @Transactional 범위와
+        readOnly 여부, N+1 쿼리 가능성, 예외를 커스텀 예외로 처리하는지 확인해주세요.
+    - path: "src/test/java/**/*.java"
+      instructions: >
+        테스트가 구현이 아닌 동작을 검증하는지, given-when-then 구조가 명확한지,
+        엣지 케이스와 실패 케이스가 함께 있는지 봐주세요.
+    - path: ".github/workflows/**"
+      instructions: >
+        시크릿이 로그에 노출될 여지가 있는지, 액션 버전이 고정되어 있는지,
+        불필요한 배포 트리거가 없는지 확인해주세요.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  web_search:
+    enabled: true
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - "**/CONTRIBUTING.md"
+      - "**/CONVENTION.md"
+      - "**/AGENTS.md"
+      - "**/CLAUDE.md"
