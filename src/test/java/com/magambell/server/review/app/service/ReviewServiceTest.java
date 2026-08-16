@@ -25,6 +25,7 @@ import com.magambell.server.review.app.port.in.request.RegisterReviewServiceRequ
 import com.magambell.server.review.app.port.in.request.ReviewListServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewMyServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewRatingAllServiceRequest;
+import com.magambell.server.review.app.port.out.ReviewCommandPort;
 import com.magambell.server.review.app.port.out.response.ReviewListDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRatingSummaryDTO;
 import com.magambell.server.review.domain.entity.ReviewReply;
@@ -84,6 +85,8 @@ class ReviewServiceTest {
     private ReviewImageRepository reviewImageRepository;
     @Autowired
     private ReviewService reviewService;
+    @Autowired
+    private ReviewCommandPort reviewCommandPort;
     @Autowired
     private OrderRepository orderRepository;
     @Autowired
@@ -350,6 +353,23 @@ class ReviewServiceTest {
                 owner.getId(),
                 "두 번째 답글"
         ))).isInstanceOf(DuplicateException.class);
+    }
+
+    @DisplayName("리뷰 답글 review_id unique 제약 위반은 중복 답글 예외로 변환된다.")
+    @Test
+    void saveReviewReply_translatesReviewIdUniqueConstraintViolation() {
+        // given
+        Review review = saveReview();
+        ReviewReply firstReply = ReviewReply.create("첫 번째 답글");
+        firstReply.addReview(review);
+        reviewReplyRepository.saveAndFlush(firstReply);
+
+        ReviewReply duplicateReply = ReviewReply.create("두 번째 답글");
+        duplicateReply.addReview(review);
+
+        // when & then
+        assertThatThrownBy(() -> reviewCommandPort.saveReviewReply(duplicateReply))
+                .isInstanceOf(DuplicateException.class);
     }
 
     @DisplayName("답글 내용이 blank이면 작성에 실패한다.")
