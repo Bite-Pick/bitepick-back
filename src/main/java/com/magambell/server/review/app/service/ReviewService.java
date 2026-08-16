@@ -18,6 +18,7 @@ import com.magambell.server.review.app.port.out.response.ReviewReportListDTO;
 import com.magambell.server.review.domain.entity.Review;
 import com.magambell.server.user.app.port.out.UserQueryPort;
 import com.magambell.server.user.domain.entity.User;
+import com.magambell.server.user.domain.enums.UserRole;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -73,6 +74,28 @@ public class ReviewService implements ReviewUseCase {
 
     @Transactional
     @Override
+    public void registerReviewReply(final RegisterReviewReplyServiceRequest request) {
+        validateReplyContent(request.content());
+
+        User user = userQueryPort.findById(request.userId());
+        Review review = reviewQueryPort.findById(request.reviewId());
+
+        validateReviewOwner(user, review);
+        reviewCommandPort.saveReviewReply(review.addReviewReply(request.content().trim()));
+    }
+
+    @Transactional
+    @Override
+    public void deleteReviewReply(final DeleteReviewReplyServiceRequest request) {
+        User user = userQueryPort.findById(request.userId());
+        Review review = reviewQueryPort.findById(request.reviewId());
+
+        validateReviewOwner(user, review);
+        review.deleteReviewReply();
+    }
+
+    @Transactional
+    @Override
     public void reportReview(final ReportReviewServiceRequest request) {
         User user = userQueryPort.findById(request.userId());
         Review review = reviewQueryPort.findById(request.reviewId());
@@ -96,6 +119,18 @@ public class ReviewService implements ReviewUseCase {
     private void existsOrderReview(final OrderGoods orderGoods, final User user) {
         if (reviewQueryPort.existsOrderAndReview(orderGoods, user)) {
             throw new DuplicateException(ErrorCode.DUPLICATE_REVIEW);
+        }
+    }
+
+    private void validateReviewOwner(final User user, final Review review) {
+        if (user.getUserRole() != UserRole.OWNER || !review.getOrderGoods().getGoods().getStore().isOwnedBy(user)) {
+            throw new InvalidRequestException(ErrorCode.INVALID_STORE_OWNER);
+        }
+    }
+
+    private void validateReplyContent(final String content) {
+        if (content == null || content.isBlank() || content.length() > 500) {
+            throw new InvalidRequestException(ErrorCode.INVALID_REVIEW_RATING);
         }
     }
 }

@@ -13,7 +13,9 @@ import com.magambell.server.review.app.port.out.response.ReviewPreSignedUrlImage
 import com.magambell.server.review.app.port.out.response.ReviewRegisterResponseDTO;
 import com.magambell.server.review.domain.entity.Review;
 import com.magambell.server.review.domain.entity.ReviewImage;
+import com.magambell.server.review.domain.entity.ReviewReply;
 import com.magambell.server.review.domain.entity.ReviewReport;
+import com.magambell.server.review.domain.repository.ReviewReplyRepository;
 import com.magambell.server.review.domain.repository.ReviewReportRepository;
 import com.magambell.server.review.domain.repository.ReviewRepository;
 import com.magambell.server.user.domain.entity.User;
@@ -27,6 +29,7 @@ public class ReviewCommandAdapter implements ReviewCommandPort {
     private static final String IMAGE_PREFIX = "REVIEW";
 
     private final ReviewRepository reviewRepository;
+    private final ReviewReplyRepository reviewReplyRepository;
     private final ReviewReportRepository reviewReportRepository;
     private final S3InputPort s3InputPort;
 
@@ -42,6 +45,11 @@ public class ReviewCommandAdapter implements ReviewCommandPort {
         reviewRepository.save(review);
 
         return new ReviewRegisterResponseDTO(review.getId(), reviewPreSignedUrlImages);
+    }
+
+    @Override
+    public void saveReviewReply(final ReviewReply reviewReply) {
+        reviewReplyRepository.save(reviewReply);
     }
 
     @Override

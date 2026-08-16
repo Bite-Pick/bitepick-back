@@ -87,19 +87,20 @@ public class Review extends BaseTimeEntity {
         reviewImage.addReview(this);
     }
 
-    public void addReviewReply(final String content) {
+    public ReviewReply addReviewReply(final String content) {
         if (this.reviewReply != null && this.reviewReply.isActive()) {
             throw new DuplicateException(ErrorCode.DUPLICATE_REVIEW_REPLY);
         }
 
         if (this.reviewReply != null) {
             this.reviewReply.restore(content);
-            return;
+            return this.reviewReply;
         }
 
         ReviewReply reply = ReviewReply.create(content);
         this.reviewReply = reply;
         reply.addReview(this);
+        return reply;
     }
 
     public void deleteReviewReply() {
