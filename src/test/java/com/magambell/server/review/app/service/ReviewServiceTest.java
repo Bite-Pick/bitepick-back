@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.magambell.server.auth.domain.ProviderType;
+import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.common.exception.InvalidRequestException;
 import com.magambell.server.goods.adapter.in.web.GoodsImagesRegister;
@@ -383,7 +384,9 @@ class ReviewServiceTest {
                 review.getId(),
                 owner.getId(),
                 "   "
-        ))).isInstanceOf(InvalidRequestException.class);
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_REVIEW_REPLY_CONTENT.getMessage());
     }
 
     @DisplayName("답글 내용이 500자를 초과하면 작성에 실패한다.")
@@ -398,7 +401,9 @@ class ReviewServiceTest {
                 review.getId(),
                 owner.getId(),
                 content
-        ))).isInstanceOf(InvalidRequestException.class);
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_REVIEW_REPLY_CONTENT.getMessage());
     }
 
     @DisplayName("타 매장 사장님은 답글 작성에 실패한다.")

@@ -130,7 +130,7 @@ public class ReviewService implements ReviewUseCase {
 
     private void validateReplyContent(final String content) {
         if (content == null || content.isBlank() || content.length() > 500) {
-            throw new InvalidRequestException(ErrorCode.INVALID_REVIEW_RATING);
+            throw new InvalidRequestException(ErrorCode.INVALID_REVIEW_REPLY_CONTENT);
         }
     }
 }
