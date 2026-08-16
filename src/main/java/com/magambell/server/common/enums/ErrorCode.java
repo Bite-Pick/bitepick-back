@@ -12,6 +12,7 @@ public enum ErrorCode {
     DUPLICATE_NICKNAME("중복된 닉네임 입니다."),
     DUPLICATE_GOODS("이미 등록된 바이트백입니다."),
     DUPLICATE_REVIEW("이미 등록된 리뷰입니다."),
+    DUPLICATE_REVIEW_REPLY("이미 등록된 리뷰 답글입니다."),
     DUPLICATE_FAVORITE("이미 즐겨찾기한 매장입니다."),
     DUPLICATE_NOTIFICATION_STORE("이미 알림 받기로한 매장입니다."),
     DUPLICATE_OPEN_REGION_REQUEST("이미 오픈 요청된 지역입니다."),
