@@ -2,6 +2,7 @@ package com.magambell.server.review.domain.entity;
 
 import com.magambell.server.common.BaseTimeEntity;
 import com.magambell.server.common.enums.ErrorCode;
+import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.common.exception.InvalidRequestException;
 import com.magambell.server.order.domain.entity.OrderGoods;
 import com.magambell.server.review.app.port.in.dto.RegisterReviewDTO;
@@ -44,6 +45,8 @@ public class Review extends BaseTimeEntity {
     @OneToMany(mappedBy = "review", cascade = CascadeType.ALL)
     private List<ReviewImage> reviewImages = new ArrayList<>();
 
+    @OneToOne(mappedBy = "review", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private ReviewReply reviewReply;
 
     @Builder(access = AccessLevel.PRIVATE)
     private Review(final Integer rating, final String description, final ReviewStatus reviewStatus) {
@@ -84,7 +87,30 @@ public class Review extends BaseTimeEntity {
         reviewImage.addReview(this);
     }
 
+    public ReviewReply addReviewReply(final String content) {
+        if (this.reviewReply != null && this.reviewReply.isActive()) {
+            throw new DuplicateException(ErrorCode.DUPLICATE_REVIEW_REPLY);
+        }
+
+        if (this.reviewReply != null) {
+            this.reviewReply.restore(content);
+            return this.reviewReply;
+        }
+
+        ReviewReply reply = ReviewReply.create(content);
+        this.reviewReply = reply;
+        reply.addReview(this);
+        return reply;
+    }
+
+    public void deleteReviewReply() {
+        if (this.reviewReply != null) {
+            this.reviewReply.delete();
+        }
+    }
+
     public void delete() {
         this.reviewStatus = ReviewStatus.DELETED;
+        deleteReviewReply();
     }
 }

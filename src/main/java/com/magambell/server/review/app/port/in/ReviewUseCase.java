@@ -19,6 +19,10 @@ public interface ReviewUseCase {
 
     void deleteReview(DeleteReviewServiceRequest request);
 
+    void registerReviewReply(RegisterReviewReplyServiceRequest request);
+
+    void deleteReviewReply(DeleteReviewReplyServiceRequest request);
+
     void reportReview(ReportReviewServiceRequest request);
 
     List<ReviewReportListDTO> getReviewReportList(ReviewReportListServiceRequest request);

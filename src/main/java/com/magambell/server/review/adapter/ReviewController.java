@@ -9,6 +9,7 @@ import com.magambell.server.review.adapter.out.persistence.ReviewRatingSummaryRe
 import com.magambell.server.review.adapter.out.persistence.ReviewRegisterResponse;
 import com.magambell.server.review.adapter.out.persistence.ReviewReportListResponse;
 import com.magambell.server.review.app.port.in.ReviewUseCase;
+import com.magambell.server.review.app.port.in.request.DeleteReviewReplyServiceRequest;
 import com.magambell.server.review.app.port.in.request.DeleteReviewServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReportReviewServiceRequest;
 import com.magambell.server.review.app.port.out.response.ReviewListDTO;
@@ -104,6 +105,35 @@ public class ReviewController {
             @AuthenticationPrincipal final CustomUserDetails customUserDetails
     ) {
         reviewUseCase.deleteReview(new DeleteReviewServiceRequest(reviewId, customUserDetails.userId()));
+
+        return new Response<>();
+    }
+
+    @PreAuthorize("hasRole('OWNER')")
+    @Operation(summary = "리뷰 답글 등록")
+    @ApiResponse(responseCode = "200", content = {
+            @Content(schema = @Schema(implementation = BaseResponse.class))})
+    @PostMapping("/{reviewId}/reply")
+    public Response<BaseResponse> registerReviewReply(
+            @PathVariable Long reviewId,
+            @RequestBody @Validated final RegisterReviewReplyRequest request,
+            @AuthenticationPrincipal final CustomUserDetails customUserDetails
+    ) {
+        reviewUseCase.registerReviewReply(request.toServiceRequest(reviewId, customUserDetails.userId()));
+
+        return new Response<>();
+    }
+
+    @PreAuthorize("hasRole('OWNER')")
+    @Operation(summary = "리뷰 답글 삭제")
+    @ApiResponse(responseCode = "200", content = {
+            @Content(schema = @Schema(implementation = BaseResponse.class))})
+    @DeleteMapping("/{reviewId}/reply")
+    public Response<BaseResponse> deleteReviewReply(
+            @PathVariable Long reviewId,
+            @AuthenticationPrincipal final CustomUserDetails customUserDetails
+    ) {
+        reviewUseCase.deleteReviewReply(new DeleteReviewReplyServiceRequest(reviewId, customUserDetails.userId()));
 
         return new Response<>();
     }
