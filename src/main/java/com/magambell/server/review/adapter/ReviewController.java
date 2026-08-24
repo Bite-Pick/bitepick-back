@@ -8,6 +8,7 @@ import com.magambell.server.review.adapter.out.persistence.ReviewListResponse;
 import com.magambell.server.review.adapter.out.persistence.ReviewRatingSummaryResponse;
 import com.magambell.server.review.adapter.out.persistence.ReviewRegisterResponse;
 import com.magambell.server.review.adapter.out.persistence.ReviewReportListResponse;
+import com.magambell.server.review.adapter.out.persistence.ReviewStoreResponse;
 import com.magambell.server.review.app.port.in.ReviewUseCase;
 import com.magambell.server.review.app.port.in.request.DeleteReviewReplyServiceRequest;
 import com.magambell.server.review.app.port.in.request.DeleteReviewServiceRequest;
@@ -93,6 +94,18 @@ public class ReviewController {
         List<ReviewListDTO> reviewListByUser = reviewUseCase.getReviewListByUser(
                 request.toServiceRequest(customUserDetails.userId()));
         return new Response<>(new ReviewListResponse(reviewListByUser));
+    }
+
+    @PreAuthorize("hasRole('OWNER')")
+    @Operation(summary = "사장님 매장 리뷰 목록")
+    @ApiResponse(responseCode = "200", content = {
+            @Content(schema = @Schema(implementation = ReviewStoreResponse.class))})
+    @GetMapping("/store")
+    public Response<ReviewStoreResponse> getStoreReviewList(
+            @ModelAttribute @Validated final ReviewStoreRequest request,
+            @AuthenticationPrincipal final CustomUserDetails customUserDetails
+    ) {
+        return new Response<>(reviewUseCase.getStoreReviewList(request.toServiceRequest(customUserDetails.userId())));
     }
 
     @PreAuthorize("hasRole('CUSTOMER')")
