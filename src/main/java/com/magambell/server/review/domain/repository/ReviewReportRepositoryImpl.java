@@ -26,7 +26,7 @@ public class ReviewReportRepositoryImpl implements ReviewReportRepositoryCustom 
     @Override
     public List<ReviewReportListDTO> getReviewReportList(final ReviewReportListServiceRequest request, final Pageable pageable) {
         BooleanBuilder conditions = new BooleanBuilder();
-        conditions.and(reviewReport.id.eq(request.reviewId()));
+        conditions.and(reviewReport.review.id.eq(request.reviewId()));
         conditions.and(user.userStatus.eq(UserStatus.ACTIVE));
         conditions.and(review.reviewStatus.eq(ReviewStatus.ACTIVE));
         return queryFactory
@@ -40,6 +40,7 @@ public class ReviewReportRepositoryImpl implements ReviewReportRepositoryCustom 
                 )
                 .from(reviewReport)
                 .innerJoin(user).on(user.id.eq(reviewReport.user.id))
+                .innerJoin(review).on(review.id.eq(reviewReport.review.id))
                 .where(conditions)
                 .orderBy(reviewReport.createdAt.desc())
                 .offset(pageable.getOffset())
