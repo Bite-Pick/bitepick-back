@@ -275,8 +275,9 @@ public class ReviewRepositoryImpl implements ReviewRepositoryCustom {
             }
         }
 
-        List<Long> reviewIds = queryFactory
-                .selectDistinct(review.id)
+        List<Tuple> reviewIdRows = queryFactory
+                .select(review.id, review.createdAt)
+                .distinct()
                 .from(review)
                 .leftJoin(reviewImage).on(reviewImage.review.id.eq(review.id))
                 .innerJoin(orderGoods).on(orderGoods.id.eq(review.orderGoods.id))
@@ -289,6 +290,10 @@ public class ReviewRepositoryImpl implements ReviewRepositoryCustom {
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .fetch();
+
+        List<Long> reviewIds = reviewIdRows.stream()
+                .map(row -> row.get(review.id))
+                .toList();
 
         if (reviewIds.isEmpty()) {
             return List.of();
