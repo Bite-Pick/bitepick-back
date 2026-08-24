@@ -15,7 +15,6 @@ import com.magambell.server.review.domain.enums.ReviewStoreFilter;
 import com.magambell.server.user.domain.enums.UserStatus;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.Tuple;
-import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberPath;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -37,8 +36,6 @@ import static com.magambell.server.review.domain.entity.QReviewReply.reviewReply
 import static com.magambell.server.review.domain.entity.QReviewReport.reviewReport;
 import static com.magambell.server.store.domain.entity.QStore.store;
 import static com.magambell.server.user.domain.entity.QUser.user;
-import static com.querydsl.core.group.GroupBy.groupBy;
-import static com.querydsl.core.group.GroupBy.set;
 
 @RequiredArgsConstructor
 public class ReviewRepositoryImpl implements ReviewRepositoryCustom {
@@ -279,7 +276,7 @@ public class ReviewRepositoryImpl implements ReviewRepositoryCustom {
         }
 
         List<Long> reviewIds = queryFactory
-                .select(review.id)
+                .selectDistinct(review.id)
                 .from(review)
                 .leftJoin(reviewImage).on(reviewImage.review.id.eq(review.id))
                 .innerJoin(orderGoods).on(orderGoods.id.eq(review.orderGoods.id))
@@ -293,8 +290,25 @@ public class ReviewRepositoryImpl implements ReviewRepositoryCustom {
                 .limit(pageable.getPageSize())
                 .fetch();
 
-        return queryFactory
-                .select(review, reviewImage, order, orderGoods, goods, store, user)
+        if (reviewIds.isEmpty()) {
+            return List.of();
+        }
+
+        List<Tuple> rows = queryFactory
+                .select(
+                        review.id,
+                        review.rating,
+                        review.description,
+                        review.createdAt,
+                        reviewImage.name,
+                        user.nickName,
+                        goods.id,
+                        store.id,
+                        store.name,
+                        reviewReply.id,
+                        reviewReply.content,
+                        reviewReply.createdAt
+                )
                 .from(review)
                 .leftJoin(reviewImage).on(reviewImage.review.id.eq(review.id))
                 .innerJoin(orderGoods).on(orderGoods.id.eq(review.orderGoods.id))
@@ -302,25 +316,37 @@ public class ReviewRepositoryImpl implements ReviewRepositoryCustom {
                 .innerJoin(goods).on(goods.id.eq(orderGoods.goods.id))
                 .innerJoin(store).on(store.id.eq(goods.store.id))
                 .innerJoin(user).on(user.id.eq(review.user.id))
+                .leftJoin(reviewReply).on(reviewReply.review.id.eq(review.id)
+                        .and(reviewReply.replyStatus.eq(ReviewReplyStatus.ACTIVE)))
                 .where(review.id.in(reviewIds))
-                .orderBy(review.createdAt.desc())
-                .transform(
-                        groupBy(review.id)
-                                .list(
-                                        Projections.constructor(
-                                                ReviewListDTO.class,
-                                                review.id,
-                                                review.rating,
-                                                review.description,
-                                                review.createdAt,
-                                                set(reviewImage.name),
-                                                user.nickName,
-                                                goods.id,
-                                                store.id,
-                                                store.name
-                                        )
-                                )
-                );
+                .orderBy(review.createdAt.desc(), reviewImage.order.asc())
+                .fetch();
+
+        Map<Long, ReviewListItemBuilder> itemByReviewId = new LinkedHashMap<>();
+        rows.forEach(row -> {
+            Long reviewId = row.get(review.id);
+            ReviewListItemBuilder builder = itemByReviewId.computeIfAbsent(reviewId, id ->
+                    new ReviewListItemBuilder(
+                            id,
+                            row.get(review.rating),
+                            row.get(review.description),
+                            row.get(review.createdAt),
+                            row.get(user.nickName),
+                            row.get(goods.id),
+                            row.get(store.id),
+                            row.get(store.name),
+                            createReply(row)
+                    ));
+
+            String imageUrl = row.get(reviewImage.name);
+            if (imageUrl != null) {
+                builder.imageUrls().add(imageUrl);
+            }
+        });
+
+        return itemByReviewId.values().stream()
+                .map(ReviewListItemBuilder::toDto)
+                .toList();
     }
 
     /* 리뷰 목록 items 조회 공통 조건
@@ -344,6 +370,49 @@ public class ReviewRepositoryImpl implements ReviewRepositoryCustom {
             return null;
         }
         return new ReviewReplyDTO(replyId, row.get(reviewReply.content), row.get(reviewReply.createdAt));
+    }
+
+    private record ReviewListItemBuilder(
+            Long reviewId,
+            Integer rating,
+            String description,
+            LocalDateTime createdAt,
+            String nickName,
+            Long goodsId,
+            Long storeId,
+            String storeName,
+            ReviewReplyDTO reply,
+            List<String> imageUrls
+    ) {
+        private ReviewListItemBuilder(
+                final Long reviewId,
+                final Integer rating,
+                final String description,
+                final LocalDateTime createdAt,
+                final String nickName,
+                final Long goodsId,
+                final Long storeId,
+                final String storeName,
+                final ReviewReplyDTO reply
+        ) {
+            this(reviewId, rating, description, createdAt, nickName, goodsId, storeId, storeName, reply,
+                    new ArrayList<>());
+        }
+
+        private ReviewListDTO toDto() {
+            return new ReviewListDTO(
+                    reviewId,
+                    rating,
+                    description,
+                    createdAt,
+                    imageUrls,
+                    nickName,
+                    goodsId,
+                    storeId,
+                    storeName,
+                    reply
+            );
+        }
     }
 
     private record ReviewStoreItemBuilder(
