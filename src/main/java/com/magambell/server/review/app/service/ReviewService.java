@@ -138,7 +138,7 @@ public class ReviewService implements ReviewUseCase {
         User user = userQueryPort.findById(request.userId());
         Review review = reviewQueryPort.findById(request.reviewId());
 
-        // 여기부터 하기
+        validateReviewReportAccess(user, review);
         reviewCommandPort.reportReview(new ReportReviewDTO(review, user));
     }
 
@@ -162,6 +162,16 @@ public class ReviewService implements ReviewUseCase {
 
     private void validateReviewOwner(final User user, final Review review) {
         if (user.getUserRole() != UserRole.OWNER || !review.getOrderGoods().getGoods().getStore().isOwnedBy(user)) {
+            throw new InvalidRequestException(ErrorCode.INVALID_STORE_OWNER);
+        }
+    }
+
+    private void validateReviewReportAccess(final User user, final Review review) {
+        if (user.getUserRole() != UserRole.OWNER) {
+            return;
+        }
+
+        if (!review.getOrderGoods().getGoods().getStore().isOwnedBy(user)) {
             throw new InvalidRequestException(ErrorCode.INVALID_STORE_OWNER);
         }
     }

@@ -151,7 +151,7 @@ public class ReviewController {
         return new Response<>();
     }
 
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'OWNER')")
     @Operation(summary = "리뷰 신고")
     @ApiResponse(responseCode = "200", content = {
             @Content(schema = @Schema(implementation = BaseResponse.class))})

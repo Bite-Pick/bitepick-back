@@ -34,7 +34,8 @@ public class ReviewReportRepositoryImpl implements ReviewReportRepositoryCustom 
                         Projections.constructor(
                                 ReviewReportListDTO.class,
                                 reviewReport.user.id,
-                                user.nickName
+                                user.nickName,
+                                user.userRole
                         )
                 )
                 .from(reviewReport)
