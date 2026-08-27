@@ -8,6 +8,7 @@ import com.magambell.server.auth.domain.ProviderType;
 import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.common.exception.InvalidRequestException;
+import com.magambell.server.common.exception.NotFoundException;
 import com.magambell.server.goods.adapter.in.web.GoodsImagesRegister;
 import com.magambell.server.goods.app.port.in.dto.RegisterGoodsDTO;
 import com.magambell.server.goods.domain.entity.Goods;
@@ -567,6 +568,34 @@ class ReviewServiceTest {
         assertThat(secondPage.nextCursor()).isNull();
     }
 
+    @DisplayName("cursor가 양수가 아니면 매장 리뷰 조회에 실패한다.")
+    @Test
+    void getStoreReviewList_throwsWhenCursorNotPositive() {
+        // when & then
+        assertThatThrownBy(() -> reviewService.getStoreReviewList(
+                new ReviewStoreServiceRequest(owner.getId(), ReviewStoreFilter.ALL, 0L, 20)))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_CURSOR.getMessage());
+
+        assertThatThrownBy(() -> reviewService.getStoreReviewList(
+                new ReviewStoreServiceRequest(owner.getId(), ReviewStoreFilter.ALL, -1L, 20)))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_CURSOR.getMessage());
+    }
+
+    @DisplayName("매장이 없는 사용자는 리뷰 조회에 실패한다.")
+    @Test
+    void getStoreReviewList_throwsWhenStoreNotFound() {
+        // given
+        User ownerWithoutStore = saveOwner("owner-without-store@test.com", "owner-without-store-social-id");
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.getStoreReviewList(
+                new ReviewStoreServiceRequest(ownerWithoutStore.getId(), ReviewStoreFilter.ALL, null, 20)))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage(ErrorCode.STORE_NOT_FOUND.getMessage());
+    }
+
     @DisplayName("사장님 리뷰 목록 summary 값을 조회한다.")
     @Test
     void getStoreReviewListSummary() {
@@ -658,6 +687,38 @@ class ReviewServiceTest {
         assertThat(reportList.get(0).userRole()).isEqualTo(UserRole.OWNER);
     }
 
+    @DisplayName("타 매장 사장님은 리뷰 신고에 실패한다.")
+    @Test
+    void ownerCannotReportOtherStoreReview() {
+        // given
+        Review review = saveReviewWithOrderGoods(orderGoods, 2, "other owner report review");
+        User otherOwner = saveOwner("report-other-owner@test.com", "report-other-owner-social-id");
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.reportReview(new ReportReviewServiceRequest(
+                review.getId(),
+                otherOwner.getId()
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_STORE_OWNER.getMessage());
+    }
+
+    @DisplayName("관리자는 리뷰 신고에 실패한다.")
+    @Test
+    void adminCannotReportReview() {
+        // given
+        Review review = saveReviewWithOrderGoods(orderGoods, 2, "admin report blocked review");
+        User admin = saveAdmin("report-admin@test.com", "report-admin-social-id");
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.reportReview(new ReportReviewServiceRequest(
+                review.getId(),
+                admin.getId()
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_USER_ROLE.getMessage());
+    }
+
     @DisplayName("관리자 신고 목록에 신고자 role을 노출한다.")
     @Test
     void getReviewReportListContainsReporterRole() {
@@ -723,6 +784,21 @@ class ReviewServiceTest {
         User otherOwner = ownerAccountDTO.toUser();
         otherOwner.addUserSocialAccount(ownerAccountDTO.toUserSocialAccount());
         return userRepository.save(otherOwner);
+    }
+
+    private User saveAdmin(final String email, final String socialId) {
+        UserSocialAccountDTO adminAccountDTO = new UserSocialAccountDTO(
+                email,
+                "admin",
+                "admin nickname",
+                "01099990000",
+                ProviderType.KAKAO,
+                socialId,
+                UserRole.ADMIN
+        );
+        User admin = adminAccountDTO.toUser();
+        admin.addUserSocialAccount(adminAccountDTO.toUserSocialAccount());
+        return userRepository.save(admin);
     }
 
     private OrderGoods createCompletedOrderGoods() {
