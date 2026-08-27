@@ -167,13 +167,18 @@ public class ReviewService implements ReviewUseCase {
     }
 
     private void validateReviewReportAccess(final User user, final Review review) {
-        if (user.getUserRole() != UserRole.OWNER) {
+        if (user.getUserRole() == UserRole.CUSTOMER) {
             return;
         }
 
-        if (!review.getOrderGoods().getGoods().getStore().isOwnedBy(user)) {
-            throw new InvalidRequestException(ErrorCode.INVALID_STORE_OWNER);
+        if (user.getUserRole() == UserRole.OWNER) {
+            if (!review.getOrderGoods().getGoods().getStore().isOwnedBy(user)) {
+                throw new InvalidRequestException(ErrorCode.INVALID_STORE_OWNER);
+            }
+            return;
         }
+
+        throw new InvalidRequestException(ErrorCode.INVALID_USER_ROLE);
     }
 
     private void validateReplyContent(final String content) {
