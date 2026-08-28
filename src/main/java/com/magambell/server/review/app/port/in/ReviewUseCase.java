@@ -5,6 +5,7 @@ import com.magambell.server.review.app.port.out.response.ReviewListDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRatingSummaryDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRegisterResponseDTO;
 import com.magambell.server.review.app.port.out.response.ReviewReportListDTO;
+import com.magambell.server.review.adapter.out.persistence.ReviewStoreResponse;
 
 import java.util.List;
 
@@ -16,6 +17,8 @@ public interface ReviewUseCase {
     ReviewRatingSummaryDTO getReviewRatingAll(ReviewRatingAllServiceRequest request);
 
     List<ReviewListDTO> getReviewListByUser(ReviewMyServiceRequest request);
+
+    ReviewStoreResponse getStoreReviewList(ReviewStoreServiceRequest request);
 
     void deleteReview(DeleteReviewServiceRequest request);
 

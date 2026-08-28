@@ -7,10 +7,13 @@ import com.magambell.server.order.domain.entity.OrderGoods;
 import com.magambell.server.review.app.port.in.request.ReviewListServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewRatingAllServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewReportListServiceRequest;
+import com.magambell.server.review.app.port.in.request.ReviewStoreServiceRequest;
 import com.magambell.server.review.app.port.out.ReviewQueryPort;
 import com.magambell.server.review.app.port.out.response.ReviewListDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRatingSummaryDTO;
 import com.magambell.server.review.app.port.out.response.ReviewReportListDTO;
+import com.magambell.server.review.app.port.out.response.ReviewStoreItemDTO;
+import com.magambell.server.review.app.port.out.response.ReviewStoreSummaryDTO;
 import com.magambell.server.review.domain.enums.ReviewStatus;
 import com.magambell.server.review.domain.entity.Review;
 import com.magambell.server.review.domain.repository.ReviewReportRepository;
@@ -46,6 +49,16 @@ public class ReviewQueryAdapter implements ReviewQueryPort {
     @Override
     public List<ReviewListDTO> getReviewListByUser(final User user, final Pageable pageable) {
         return reviewRepository.getReviewListByUser(user.getId(), pageable);
+    }
+
+    @Override
+    public List<ReviewStoreItemDTO> getStoreReviewList(final ReviewStoreServiceRequest request, final Long storeId) {
+        return reviewRepository.getStoreReviewList(request, storeId);
+    }
+
+    @Override
+    public ReviewStoreSummaryDTO getStoreReviewSummary(final Long storeId) {
+        return reviewRepository.getStoreReviewSummary(storeId);
     }
 
     @Override

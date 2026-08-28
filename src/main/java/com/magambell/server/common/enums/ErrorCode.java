@@ -41,6 +41,7 @@ public enum ErrorCode {
     INVALID_REVIEW_RATING("아쉬워요, 적당해요, 좋아요, 최고예요 중 선택해 주세요."),
     INVALID_REVIEW_REPLY_CONTENT("답글은 1자 이상 500자 이하로 작성해 주세요."),
     INVALID_REJECT_REASON("선택할 수 없는 주문 거절 사유입니다."),
+    INVALID_CURSOR("유효하지 않은 커서입니다."),
 
     INVALID_PORT_ONE_ACCESS_TOKEN("토큰 발급 실패"),
     INVALID_PAYMENT_STATUS_PAID("결제가 완료되지 않았습니다."),

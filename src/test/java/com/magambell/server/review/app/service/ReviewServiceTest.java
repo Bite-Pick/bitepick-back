@@ -8,6 +8,7 @@ import com.magambell.server.auth.domain.ProviderType;
 import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.common.exception.InvalidRequestException;
+import com.magambell.server.common.exception.NotFoundException;
 import com.magambell.server.goods.adapter.in.web.GoodsImagesRegister;
 import com.magambell.server.goods.app.port.in.dto.RegisterGoodsDTO;
 import com.magambell.server.goods.domain.entity.Goods;
@@ -26,15 +27,24 @@ import com.magambell.server.review.app.port.in.request.RegisterReviewServiceRequ
 import com.magambell.server.review.app.port.in.request.ReviewListServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewMyServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewRatingAllServiceRequest;
+import com.magambell.server.review.app.port.in.request.ReportReviewServiceRequest;
+import com.magambell.server.review.app.port.in.request.ReviewReportListServiceRequest;
+import com.magambell.server.review.app.port.in.request.ReviewStoreServiceRequest;
 import com.magambell.server.review.app.port.out.ReviewCommandPort;
 import com.magambell.server.review.app.port.out.response.ReviewListDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRatingSummaryDTO;
+import com.magambell.server.review.app.port.out.response.ReviewReportListDTO;
+import com.magambell.server.review.app.port.out.response.ReviewStoreItemDTO;
+import com.magambell.server.review.adapter.out.persistence.ReviewStoreResponse;
+import com.magambell.server.review.domain.entity.ReviewImage;
 import com.magambell.server.review.domain.entity.ReviewReply;
 import com.magambell.server.review.domain.enums.ReviewReplyStatus;
 import com.magambell.server.review.domain.enums.ReviewStatus;
+import com.magambell.server.review.domain.enums.ReviewStoreFilter;
 import com.magambell.server.review.domain.entity.Review;
 import com.magambell.server.review.domain.repository.ReviewImageRepository;
 import com.magambell.server.review.domain.repository.ReviewReplyRepository;
+import com.magambell.server.review.domain.repository.ReviewReportRepository;
 import com.magambell.server.review.domain.repository.ReviewRepository;
 import com.magambell.server.stock.domain.repository.StockHistoryRepository;
 import com.magambell.server.stock.domain.repository.StockRepository;
@@ -82,6 +92,8 @@ class ReviewServiceTest {
     private ReviewRepository reviewRepository;
     @Autowired
     private ReviewReplyRepository reviewReplyRepository;
+    @Autowired
+    private ReviewReportRepository reviewReportRepository;
     @Autowired
     private ReviewImageRepository reviewImageRepository;
     @Autowired
@@ -163,6 +175,7 @@ class ReviewServiceTest {
     void tearDown() {
         reviewImageRepository.deleteAllInBatch();
         reviewReplyRepository.deleteAllInBatch();
+        reviewReportRepository.deleteAllInBatch();
         reviewRepository.deleteAllInBatch();
         stockHistoryRepository.deleteAllInBatch();
         stockRepository.deleteAllInBatch();
@@ -459,6 +472,274 @@ class ReviewServiceTest {
         assertThat(reply.getReplyStatus()).isEqualTo(ReviewReplyStatus.DELETED);
     }
 
+    @DisplayName("사장님이 본인 매장 리뷰 목록을 조회한다.")
+    @Test
+    void getStoreReviewList() {
+        // given
+        Review review = saveReviewWithOrderGoods(createCompletedOrderGoods(), 3, "사장님 목록 리뷰");
+        review.addReviewImage(ReviewImage.create("review-image-1.jpg", 1));
+        reviewRepository.saveAndFlush(review);
+
+        ReviewStoreServiceRequest request = new ReviewStoreServiceRequest(
+                owner.getId(),
+                ReviewStoreFilter.ALL,
+                null,
+                20
+        );
+
+        // when
+        ReviewStoreResponse response = reviewService.getStoreReviewList(request);
+
+        // then
+        assertThat(response.items()).hasSize(1);
+        ReviewStoreItemDTO item = response.items().get(0);
+        assertThat(item.reviewId()).isEqualTo(review.getId());
+        assertThat(item.rating()).isEqualTo(3);
+        assertThat(item.description()).isEqualTo("사장님 목록 리뷰");
+        assertThat(item.productName()).isEqualTo(goods.getName());
+        assertThat(item.nickName()).isEqualTo(user.getNickName());
+        assertThat(item.orderedAt()).isNotNull();
+        assertThat(item.imageUrls()).containsExactly("review-image-1.jpg");
+        assertThat(response.hasNext()).isFalse();
+        assertThat(response.nextCursor()).isNull();
+    }
+
+    @DisplayName("사장님 리뷰 목록에서 미답변 리뷰만 조회한다.")
+    @Test
+    void getStoreReviewListNoReplyFilter() {
+        // given
+        Review repliedReview = saveReviewWithOrderGoods(createCompletedOrderGoods(), 3, "답변 완료 리뷰");
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                repliedReview.getId(),
+                owner.getId(),
+                "답변입니다."
+        ));
+        Review noReplyReview = saveReviewWithOrderGoods(createCompletedOrderGoods(), 2, "미답변 리뷰");
+
+        ReviewStoreServiceRequest request = new ReviewStoreServiceRequest(
+                owner.getId(),
+                ReviewStoreFilter.NO_REPLY,
+                null,
+                20
+        );
+
+        // when
+        ReviewStoreResponse response = reviewService.getStoreReviewList(request);
+
+        // then
+        assertThat(response.items()).hasSize(1);
+        assertThat(response.items().get(0).reviewId()).isEqualTo(noReplyReview.getId());
+        assertThat(response.items().get(0).reply()).isNull();
+    }
+
+    @DisplayName("사장님 리뷰 목록은 cursor 기반으로 다음 페이지를 조회한다.")
+    @Test
+    void getStoreReviewListCursorPagination() {
+        // given
+        Review first = saveReviewWithOrderGoods(createCompletedOrderGoods(), 1, "첫 번째 리뷰");
+        Review second = saveReviewWithOrderGoods(createCompletedOrderGoods(), 2, "두 번째 리뷰");
+        Review third = saveReviewWithOrderGoods(createCompletedOrderGoods(), 3, "세 번째 리뷰");
+
+        ReviewStoreServiceRequest firstPageRequest = new ReviewStoreServiceRequest(
+                owner.getId(),
+                ReviewStoreFilter.ALL,
+                null,
+                2
+        );
+
+        // when
+        ReviewStoreResponse firstPage = reviewService.getStoreReviewList(firstPageRequest);
+        ReviewStoreResponse secondPage = reviewService.getStoreReviewList(new ReviewStoreServiceRequest(
+                owner.getId(),
+                ReviewStoreFilter.ALL,
+                firstPage.nextCursor(),
+                2
+        ));
+
+        // then
+        assertThat(firstPage.items()).extracting(ReviewStoreItemDTO::reviewId)
+                .containsExactly(third.getId(), second.getId());
+        assertThat(firstPage.hasNext()).isTrue();
+        assertThat(firstPage.nextCursor()).isEqualTo(second.getId());
+
+        assertThat(secondPage.items()).extracting(ReviewStoreItemDTO::reviewId)
+                .containsExactly(first.getId());
+        assertThat(secondPage.hasNext()).isFalse();
+        assertThat(secondPage.nextCursor()).isNull();
+    }
+
+    @DisplayName("cursor가 양수가 아니면 매장 리뷰 조회에 실패한다.")
+    @Test
+    void getStoreReviewList_throwsWhenCursorNotPositive() {
+        // when & then
+        assertThatThrownBy(() -> reviewService.getStoreReviewList(
+                new ReviewStoreServiceRequest(owner.getId(), ReviewStoreFilter.ALL, 0L, 20)))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_CURSOR.getMessage());
+
+        assertThatThrownBy(() -> reviewService.getStoreReviewList(
+                new ReviewStoreServiceRequest(owner.getId(), ReviewStoreFilter.ALL, -1L, 20)))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_CURSOR.getMessage());
+    }
+
+    @DisplayName("매장이 없는 사용자는 리뷰 조회에 실패한다.")
+    @Test
+    void getStoreReviewList_throwsWhenStoreNotFound() {
+        // given
+        User ownerWithoutStore = saveOwner("owner-without-store@test.com", "owner-without-store-social-id");
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.getStoreReviewList(
+                new ReviewStoreServiceRequest(ownerWithoutStore.getId(), ReviewStoreFilter.ALL, null, 20)))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage(ErrorCode.STORE_NOT_FOUND.getMessage());
+    }
+
+    @DisplayName("사장님 리뷰 목록 summary 값을 조회한다.")
+    @Test
+    void getStoreReviewListSummary() {
+        // given
+        saveReviewWithOrderGoods(createCompletedOrderGoods(), 1, "1점 리뷰");
+        saveReviewWithOrderGoods(createCompletedOrderGoods(), 2, "2점 리뷰");
+        Review review3 = saveReviewWithOrderGoods(createCompletedOrderGoods(), 3, "3점 리뷰");
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review3.getId(),
+                owner.getId(),
+                "답변입니다."
+        ));
+
+        ReviewStoreServiceRequest request = new ReviewStoreServiceRequest(
+                owner.getId(),
+                ReviewStoreFilter.ALL,
+                null,
+                20
+        );
+
+        // when
+        ReviewStoreResponse response = reviewService.getStoreReviewList(request);
+
+        // then
+        assertThat(response.summary().averageRating()).isEqualTo(2.0);
+        assertThat(response.summary().totalCount()).isEqualTo(3);
+        assertThat(response.summary().noReplyCount()).isEqualTo(2);
+    }
+
+    @DisplayName("고객 리뷰 조회 응답에 사장님 답글을 포함한다.")
+    @Test
+    void getReviewListContainsReply() {
+        // given
+        Review review = saveReviewWithOrderGoods(orderGoods, 2, "답글 포함 리뷰");
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "방문해 주셔서 감사합니다."
+        ));
+        ReviewListServiceRequest request = new ReviewListServiceRequest(user.getId(), goods.getId(), false, 1, 10);
+
+        // when
+        List<ReviewListDTO> reviewList = reviewService.getReviewList(request);
+
+        // then
+        assertThat(reviewList).hasSize(1);
+        assertThat(reviewList.get(0).reply()).isNotNull();
+        assertThat(reviewList.get(0).reply().content()).isEqualTo("방문해 주셔서 감사합니다.");
+    }
+
+    @DisplayName("고객 리뷰 조회 응답의 이미지 목록은 ReviewImage.order 기준으로 정렬된다.")
+    @Test
+    void getReviewListSortsImageUrlsByReviewImageOrder() {
+        // given
+        Review review = saveReviewWithOrderGoods(orderGoods, 2, "이미지 정렬 리뷰");
+        review.addReviewImage(ReviewImage.create("second.jpg", 2));
+        review.addReviewImage(ReviewImage.create("first.jpg", 1));
+        review.addReviewImage(ReviewImage.create("third.jpg", 3));
+        reviewRepository.saveAndFlush(review);
+
+        ReviewListServiceRequest request = new ReviewListServiceRequest(user.getId(), goods.getId(), false, 1, 10);
+
+        // when
+        List<ReviewListDTO> reviewList = reviewService.getReviewList(request);
+
+        // then
+        assertThat(reviewList).hasSize(1);
+        assertThat(reviewList.get(0).imageUrls())
+                .containsExactly("first.jpg", "second.jpg", "third.jpg");
+    }
+
+    @DisplayName("사장님이 본인 매장 리뷰를 신고한다.")
+    @Test
+    void ownerReportsOwnStoreReview() {
+        // given
+        Review review = saveReviewWithOrderGoods(orderGoods, 2, "사장님 신고 리뷰");
+
+        // when
+        reviewService.reportReview(new ReportReviewServiceRequest(
+                review.getId(),
+                owner.getId()
+        ));
+
+        // then
+        List<ReviewReportListDTO> reportList = reviewService.getReviewReportList(
+                new ReviewReportListServiceRequest(review.getId(), 1, 10));
+        assertThat(reportList).hasSize(1);
+        assertThat(reportList.get(0).userId()).isEqualTo(owner.getId());
+        assertThat(reportList.get(0).userRole()).isEqualTo(UserRole.OWNER);
+    }
+
+    @DisplayName("타 매장 사장님은 리뷰 신고에 실패한다.")
+    @Test
+    void ownerCannotReportOtherStoreReview() {
+        // given
+        Review review = saveReviewWithOrderGoods(orderGoods, 2, "other owner report review");
+        User otherOwner = saveOwner("report-other-owner@test.com", "report-other-owner-social-id");
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.reportReview(new ReportReviewServiceRequest(
+                review.getId(),
+                otherOwner.getId()
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_STORE_OWNER.getMessage());
+    }
+
+    @DisplayName("관리자는 리뷰 신고에 실패한다.")
+    @Test
+    void adminCannotReportReview() {
+        // given
+        Review review = saveReviewWithOrderGoods(orderGoods, 2, "admin report blocked review");
+        User admin = saveAdmin("report-admin@test.com", "report-admin-social-id");
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.reportReview(new ReportReviewServiceRequest(
+                review.getId(),
+                admin.getId()
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_USER_ROLE.getMessage());
+    }
+
+    @DisplayName("관리자 신고 목록에 신고자 role을 노출한다.")
+    @Test
+    void getReviewReportListContainsReporterRole() {
+        // given
+        Review review = saveReviewWithOrderGoods(orderGoods, 2, "신고자 role 리뷰");
+        reviewService.reportReview(new ReportReviewServiceRequest(
+                review.getId(),
+                user.getId()
+        ));
+
+        // when
+        List<ReviewReportListDTO> reportList = reviewService.getReviewReportList(
+                new ReviewReportListServiceRequest(review.getId(), 1, 10));
+
+        // then
+        assertThat(reportList).hasSize(1);
+        assertThat(reportList.get(0).userId()).isEqualTo(user.getId());
+        assertThat(reportList.get(0).nickName()).isEqualTo(user.getNickName());
+        assertThat(reportList.get(0).userRole()).isEqualTo(UserRole.CUSTOMER);
+    }
+
     private Review createReview(int i) {
         CreateOrderDTO createOrderDTO = new CreateOrderDTO(user, goods, 1, 9000, LocalDateTime.now(), "test");
         Order createOrder = createOrderDTO.toOrder();
@@ -503,5 +784,41 @@ class ReviewServiceTest {
         User otherOwner = ownerAccountDTO.toUser();
         otherOwner.addUserSocialAccount(ownerAccountDTO.toUserSocialAccount());
         return userRepository.save(otherOwner);
+    }
+
+    private User saveAdmin(final String email, final String socialId) {
+        UserSocialAccountDTO adminAccountDTO = new UserSocialAccountDTO(
+                email,
+                "admin",
+                "admin nickname",
+                "01099990000",
+                ProviderType.KAKAO,
+                socialId,
+                UserRole.ADMIN
+        );
+        User admin = adminAccountDTO.toUser();
+        admin.addUserSocialAccount(adminAccountDTO.toUserSocialAccount());
+        return userRepository.save(admin);
+    }
+
+    private OrderGoods createCompletedOrderGoods() {
+        CreateOrderDTO createOrderDTO = new CreateOrderDTO(user, goods, 1, 9000, LocalDateTime.now(), "test");
+        Order createOrder = createOrderDTO.toOrder();
+        createOrder.completed();
+        Order savedOrder = orderRepository.save(createOrder);
+        return savedOrder.getOrderGoodsList().get(0);
+    }
+
+    private Review saveReviewWithOrderGoods(final OrderGoods targetOrderGoods, final int rating,
+                                            final String description) {
+        RegisterReviewDTO dto = new RegisterReviewDTO(
+                targetOrderGoods.getId(),
+                rating,
+                description,
+                List.of(),
+                user,
+                targetOrderGoods
+        );
+        return reviewRepository.saveAndFlush(Review.create(dto));
     }
 }

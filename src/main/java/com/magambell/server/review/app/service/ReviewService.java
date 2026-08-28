@@ -3,9 +3,11 @@ package com.magambell.server.review.app.service;
 import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.common.exception.InvalidRequestException;
+import com.magambell.server.common.exception.NotFoundException;
 import com.magambell.server.order.app.port.out.OrderQueryPort;
 import com.magambell.server.order.domain.entity.OrderGoods;
 import com.magambell.server.order.domain.enums.OrderStatus;
+import com.magambell.server.review.adapter.out.persistence.ReviewStoreResponse;
 import com.magambell.server.review.app.port.in.ReviewUseCase;
 import com.magambell.server.review.app.port.in.dto.ReportReviewDTO;
 import com.magambell.server.review.app.port.in.request.*;
@@ -15,7 +17,10 @@ import com.magambell.server.review.app.port.out.response.ReviewListDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRatingSummaryDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRegisterResponseDTO;
 import com.magambell.server.review.app.port.out.response.ReviewReportListDTO;
+import com.magambell.server.review.app.port.out.response.ReviewStoreItemDTO;
 import com.magambell.server.review.domain.entity.Review;
+import com.magambell.server.store.app.port.out.StoreQueryPort;
+import com.magambell.server.store.domain.entity.Store;
 import com.magambell.server.user.app.port.out.UserQueryPort;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.enums.UserRole;
@@ -35,6 +40,7 @@ public class ReviewService implements ReviewUseCase {
     private final ReviewQueryPort reviewQueryPort;
     private final UserQueryPort userQueryPort;
     private final OrderQueryPort orderQueryPort;
+    private final StoreQueryPort storeQueryPort;
 
     @Transactional
     @Override
@@ -62,6 +68,38 @@ public class ReviewService implements ReviewUseCase {
     public List<ReviewListDTO> getReviewListByUser(final ReviewMyServiceRequest request) {
         User user = userQueryPort.findById(request.userId());
         return reviewQueryPort.getReviewListByUser(user, PageRequest.of(request.page() - 1, request.size()));
+    }
+
+    @Override
+    public ReviewStoreResponse getStoreReviewList(final ReviewStoreServiceRequest request) {
+        // cursor 검증
+        validateCursor(request.cursor());
+
+        // 로그인한 사장님 사용자 조회
+        User user = userQueryPort.findById(request.userId());
+        // 사장님의 소유 매장 조회
+        Store store = storeQueryPort.getStoreByUser(user)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.STORE_NOT_FOUND));
+
+        // 리뷰 목록 조회
+        List<ReviewStoreItemDTO> items =
+                reviewQueryPort.getStoreReviewList(request, store.getId());
+        // hasNext 계산
+        boolean hasNext = items.size() > request.size();
+        // 실제 응답 items 자르기
+        List<ReviewStoreItemDTO> resultItems =
+                hasNext ? items.subList(0, request.size()) : items;
+        // 현재 응답의 마지막 리뷰 ID를 nextCursor로 줌
+        Long nextCursor = hasNext && !resultItems.isEmpty()
+                ? resultItems.get(resultItems.size() - 1).reviewId()
+                : null;
+
+        return new ReviewStoreResponse(
+                reviewQueryPort.getStoreReviewSummary(store.getId()),
+                resultItems,
+                nextCursor,
+                hasNext
+        );
     }
 
     @Transactional
@@ -100,7 +138,7 @@ public class ReviewService implements ReviewUseCase {
         User user = userQueryPort.findById(request.userId());
         Review review = reviewQueryPort.findById(request.reviewId());
 
-        // 여기부터 하기
+        validateReviewReportAccess(user, review);
         reviewCommandPort.reportReview(new ReportReviewDTO(review, user));
     }
 
@@ -128,9 +166,31 @@ public class ReviewService implements ReviewUseCase {
         }
     }
 
+    private void validateReviewReportAccess(final User user, final Review review) {
+        if (user.getUserRole() == UserRole.CUSTOMER) {
+            return;
+        }
+
+        if (user.getUserRole() == UserRole.OWNER) {
+            if (!review.getOrderGoods().getGoods().getStore().isOwnedBy(user)) {
+                throw new InvalidRequestException(ErrorCode.INVALID_STORE_OWNER);
+            }
+            return;
+        }
+
+        throw new InvalidRequestException(ErrorCode.INVALID_USER_ROLE);
+    }
+
     private void validateReplyContent(final String content) {
         if (content == null || content.isBlank() || content.length() > 500) {
             throw new InvalidRequestException(ErrorCode.INVALID_REVIEW_REPLY_CONTENT);
+        }
+    }
+
+    // 커서 검증 메서드 (양수)
+    private void validateCursor(final Long cursor) {
+        if (cursor != null && cursor <= 0) {
+            throw new InvalidRequestException(ErrorCode.INVALID_CURSOR);
         }
     }
 }

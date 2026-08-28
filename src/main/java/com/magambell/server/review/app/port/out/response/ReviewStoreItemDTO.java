@@ -4,32 +4,24 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 
-public record ReviewListDTO(
+public record ReviewStoreItemDTO(
         Long reviewId,
         Integer rating,
         String description,
-        LocalDateTime createdAt,
         List<String> imageUrls,
         String nickName,
-        Long goodsId,
-        Long storeId,
-        String storeName,
+        LocalDateTime orderedAt,
+        LocalDateTime createdAt,
+        String productName,
         ReviewReplyDTO reply
 ) {
-    public ReviewListDTO {
+    public ReviewStoreItemDTO {
         imageUrls = imageUrls == null ? List.of() : imageUrls.stream()
                 .filter(Objects::nonNull)
                 .toList();
     }
+
     public String getReviewId() {
         return String.valueOf(reviewId);
-    }
-
-    public String getGoodsId() {
-        return String.valueOf(goodsId);
-    }
-
-    public String getStoreId() {
-        return String.valueOf(storeId);
     }
 }
