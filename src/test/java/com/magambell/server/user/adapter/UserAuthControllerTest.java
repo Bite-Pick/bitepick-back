@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.magambell.server.auth.app.service.JwtService;
 import com.magambell.server.user.adapter.in.web.UserRegisterRequest;
 import com.magambell.server.user.app.port.in.UserUseCase;
+import com.magambell.server.user.domain.enums.SignupSource;
 import com.magambell.server.user.domain.enums.UserRole;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,7 +45,9 @@ class UserAuthControllerTest {
                 "홍길동",
                 "01012341234",
                 "test",
-                UserRole.CUSTOMER);
+                UserRole.CUSTOMER,
+                SignupSource.INSTAGRAM,
+                null);
 
         // when // then
         mockMvc.perform(

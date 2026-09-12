@@ -27,6 +27,8 @@ public enum ErrorCode {
     INVALID_NICK_NAME("닉네임을 입력해 주세요."),
     INVALID_USER_ROLE("사용자 유형을 선택해 주세요."),
     INVALID_PHONE_NUMBER("휴대폰 번호를 입력해 주세요."),
+    INVALID_SIGNUP_SOURCE("가입 경로를 선택해 주세요."),
+    INVALID_SIGNUP_SOURCE_DETAIL("가입 경로 상세 내용을 올바르게 입력해 주세요."),
     STOCK_NOT_ENOUGH("재고가 부족합니다."),
     STOCK_INVALID_QUANTITY("수량은 0보다 커야 합니다."),
     INVALID_PICKUP_TIME("유효하지 않은 픽업 시간입니다."),

@@ -32,6 +32,7 @@ import com.magambell.server.user.app.port.in.dto.UserSocialAccountDTO;
 import com.magambell.server.user.app.port.in.request.RegisterServiceRequest;
 import com.magambell.server.user.app.port.out.dto.MyPageStatsDTO;
 import com.magambell.server.user.domain.enums.UserRole;
+import com.magambell.server.user.domain.enums.SignupSource;
 import com.magambell.server.user.domain.enums.VerificationStatus;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.repository.UserEmailRepository;
@@ -102,7 +103,7 @@ class UserServiceTest {
         userEmailRepository.save(userEmailDTO.toUserEmail());
 
         RegisterServiceRequest request = new RegisterServiceRequest(email, "Qwer1234!!", "test", "01012341234",
-                UserRole.CUSTOMER, authCode);
+                UserRole.CUSTOMER, authCode, SignupSource.SEARCH, null);
 
         // when
         userService.register(request);
@@ -128,7 +129,7 @@ class UserServiceTest {
         userEmailRepository.save(userEmailDTO.toUserEmail());
 
         RegisterServiceRequest request = new RegisterServiceRequest(email, "Qwer1234!!", "test", "01012341234",
-                UserRole.CUSTOMER, authCode);
+                UserRole.CUSTOMER, authCode, SignupSource.SEARCH, null);
 
         // when // then
         assertThatThrownBy(() -> userService.register(request))
@@ -143,7 +144,7 @@ class UserServiceTest {
         String authCode = "testCode";
         String email = "test@test.com";
         RegisterServiceRequest request = new RegisterServiceRequest(email, "Qwer1234!!", "test", "01012341234",
-                UserRole.CUSTOMER, authCode);
+                UserRole.CUSTOMER, authCode, SignupSource.SEARCH, null);
 
         // when // then
         assertThatThrownBy(() -> userService.register(request))
@@ -169,7 +170,7 @@ class UserServiceTest {
         userEmailRepository.save(userEmailDTO.toUserEmail());
 
         RegisterServiceRequest request = new RegisterServiceRequest(email, password, "test", "01012341234",
-                UserRole.CUSTOMER, authCode);
+                UserRole.CUSTOMER, authCode, SignupSource.SEARCH, null);
 
         // when // then
         assertThatThrownBy(() -> userService.register(request))

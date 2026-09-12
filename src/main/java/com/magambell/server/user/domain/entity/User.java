@@ -104,8 +104,8 @@ public class User extends BaseTimeEntity {
                 .password(dto.password())
                 .name(dto.name())
                 .phoneNumber(dto.phoneNumber())
-                .signupSource(null)
-                .signupSourceDetail(null)
+                .signupSource(dto.signupSource())
+                .signupSourceDetail(dto.signupSourceDetail())
                 .userRole(dto.userRole())
                 .userStatus(UserStatus.ACTIVE)
                 .build();
