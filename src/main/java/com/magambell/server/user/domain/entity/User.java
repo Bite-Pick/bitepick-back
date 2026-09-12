@@ -8,6 +8,7 @@ import com.magambell.server.review.domain.entity.Review;
 import com.magambell.server.store.domain.entity.Store;
 import com.magambell.server.user.app.port.in.dto.UserDTO;
 import com.magambell.server.user.app.port.in.dto.UserSocialAccountDTO;
+import com.magambell.server.user.domain.enums.SignupSource;
 import com.magambell.server.user.domain.enums.UserRole;
 import com.magambell.server.user.domain.enums.UserStatus;
 import io.hypersistence.utils.hibernate.id.Tsid;
@@ -48,6 +49,13 @@ public class User extends BaseTimeEntity {
 
     private String phoneNumber;
 
+    @Column(name = "signup_source", length = 30)
+    @Enumerated(EnumType.STRING)
+    private SignupSource signupSource;
+
+    @Column(name = "signup_source_detail", length = 100)
+    private String signupSourceDetail;
+
     @Enumerated(EnumType.STRING)
     private UserRole userRole;
 
@@ -75,6 +83,8 @@ public class User extends BaseTimeEntity {
     @Builder(access = AccessLevel.PRIVATE)
     private User(final String email, final String password, final String name, final String nickName,
                  final String phoneNumber,
+                 final SignupSource signupSource,
+                 final String signupSourceDetail,
                  final UserRole userRole,
                  final UserStatus userStatus) {
         this.email = email;
@@ -82,6 +92,8 @@ public class User extends BaseTimeEntity {
         this.name = name;
         this.nickName = nickName;
         this.phoneNumber = phoneNumber;
+        this.signupSource = signupSource;
+        this.signupSourceDetail = signupSourceDetail;
         this.userRole = userRole;
         this.userStatus = userStatus;
     }
@@ -92,6 +104,8 @@ public class User extends BaseTimeEntity {
                 .password(dto.password())
                 .name(dto.name())
                 .phoneNumber(dto.phoneNumber())
+                .signupSource(null)
+                .signupSourceDetail(null)
                 .userRole(dto.userRole())
                 .userStatus(UserStatus.ACTIVE)
                 .build();
@@ -103,6 +117,8 @@ public class User extends BaseTimeEntity {
                 .name(dto.name())
                 .nickName(dto.nickName())
                 .phoneNumber(dto.phoneNumber())
+                .signupSource(null)
+                .signupSourceDetail(null)
                 .userRole(dto.userRole())
                 .userStatus(UserStatus.ACTIVE)
                 .build();
