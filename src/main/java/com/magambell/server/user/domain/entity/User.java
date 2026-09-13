@@ -117,8 +117,8 @@ public class User extends BaseTimeEntity {
                 .name(dto.name())
                 .nickName(dto.nickName())
                 .phoneNumber(dto.phoneNumber())
-                .signupSource(null)
-                .signupSourceDetail(null)
+                .signupSource(dto.signupSource())
+                .signupSourceDetail(dto.signupSourceDetail())
                 .userRole(dto.userRole())
                 .userStatus(UserStatus.ACTIVE)
                 .build();

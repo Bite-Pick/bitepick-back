@@ -3,9 +3,10 @@ package com.magambell.server.user.app.port.in.dto;
 import com.magambell.server.auth.domain.ProviderType;
 import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.InvalidRequestException;
-import com.magambell.server.user.domain.enums.UserRole;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.entity.UserSocialAccount;
+import com.magambell.server.user.domain.enums.SignupSource;
+import com.magambell.server.user.domain.enums.UserRole;
 
 public record UserSocialAccountDTO(
         String email,
@@ -14,14 +15,18 @@ public record UserSocialAccountDTO(
         String phoneNumber,
         ProviderType providerType,
         String providerId,
-        UserRole userRole
+        UserRole userRole,
+        SignupSource signupSource,
+        String signupSourceDetail
 ) {
 
     public UserSocialAccountDTO(final String email, final String name, final String nickName,
                                 final String phoneNumber,
                                 final ProviderType providerType,
                                 final String providerId,
-                                final UserRole userRole) {
+                                final UserRole userRole,
+                                final SignupSource signupSource,
+                                final String signupSourceDetail) {
         this.email = validateEmail(email);
         this.name = name;
         this.nickName = nickName;
@@ -29,6 +34,14 @@ public record UserSocialAccountDTO(
         this.providerType = providerType;
         this.providerId = providerId;
         this.userRole = userRole;
+        this.signupSource = signupSource;
+        this.signupSourceDetail = signupSourceDetail;
+    }
+
+    public UserSocialAccountDTO(final String email, final String name, final String nickName,
+                                final String phoneNumber, final ProviderType providerType,
+                                final String providerId, final UserRole userRole) {
+        this(email, name, nickName, phoneNumber, providerType, providerId, userRole, null, null);
     }
 
     private String validateEmail(final String email) {

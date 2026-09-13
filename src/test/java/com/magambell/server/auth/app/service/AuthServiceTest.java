@@ -13,6 +13,7 @@ import com.magambell.server.user.app.port.in.dto.UserSocialAccountDTO;
 import com.magambell.server.user.app.port.out.OAuthClient;
 import com.magambell.server.user.app.port.out.UserCommandPort;
 import com.magambell.server.user.app.port.out.UserQueryPort;
+import com.magambell.server.user.domain.enums.SignupSource;
 import com.magambell.server.user.domain.enums.UserRole;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.repository.UserRepository;
@@ -73,7 +74,7 @@ class AuthServiceTest {
     void kakaoSignUp() {
         // given
         SocialLoginServiceRequest socialLoginServiceRequest = new SocialLoginServiceRequest(ProviderType.KAKAO, "test",
-                "이름", "닉네임", "01012341234", UserRole.CUSTOMER);
+                "이름", "닉네임", "01012341234", UserRole.CUSTOMER, SignupSource.OTHER, "친구 소개");
 
         // when
         testService.loginOrSignUp(socialLoginServiceRequest);
@@ -84,6 +85,8 @@ class AuthServiceTest {
                 .contains(
                         "test@test.com",
                         "이름");
+        assertThat(user.getSignupSource()).isEqualTo(SignupSource.OTHER);
+        assertThat(user.getSignupSourceDetail()).isEqualTo("친구 소개");
     }
 
     @DisplayName("이미 계정이 있으면 로그인 처리한다.")
