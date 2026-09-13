@@ -3,6 +3,7 @@ package com.magambell.server.user.adapter;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.magambell.server.auth.app.service.JwtService;
@@ -57,5 +58,50 @@ class UserAuthControllerTest {
                 )
                 .andDo(print())
                 .andExpect(status().isOk());
+    }
+
+    @DisplayName("회원가입 요청에서 가입 경로를 누락하면 400을 반환한다.")
+    @Test
+    void registerWithoutSignupSource() throws Exception {
+        String request = """
+                {
+                  "email": "test@test.com",
+                  "password": "Qwer1234!!",
+                  "name": "홍길동",
+                  "phoneNumber": "01012341234",
+                  "authCode": "test",
+                  "userRole": "CUSTOMER"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/user/register")
+                        .content(request)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(userUseCase);
+    }
+
+    @DisplayName("회원가입 요청의 가입 경로 코드가 올바르지 않으면 400을 반환한다.")
+    @Test
+    void registerWithUnknownSignupSource() throws Exception {
+        String request = """
+                {
+                  "email": "test@test.com",
+                  "password": "Qwer1234!!",
+                  "name": "홍길동",
+                  "phoneNumber": "01012341234",
+                  "authCode": "test",
+                  "userRole": "CUSTOMER",
+                  "signupSource": "UNKNOWN"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/user/register")
+                        .content(request)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(userUseCase);
     }
 }
