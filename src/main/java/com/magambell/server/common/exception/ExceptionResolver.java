@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -39,6 +40,21 @@ public class ExceptionResolver {
                         .statusCode(400)
                         .code("VALIDATION_ERROR")
                         .message(errorMessage)
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadableException(HttpMessageNotReadableException e,
+                                                                            HttpServletRequest request) {
+        log.warn("Malformed request body: {}", e.getMessage());
+
+        return ResponseEntity
+                .badRequest()
+                .body(ErrorResponse.builder()
+                        .statusCode(400)
+                        .code("INVALID_REQUEST_BODY")
+                        .message("요청 본문 값이 올바르지 않습니다.")
                         .path(request.getRequestURI())
                         .build());
     }
