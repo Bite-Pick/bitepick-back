@@ -16,6 +16,7 @@ import com.magambell.server.user.app.port.in.dto.UserSocialAccountDTO;
 import com.magambell.server.user.app.port.out.OAuthClient;
 import com.magambell.server.user.app.port.out.UserCommandPort;
 import com.magambell.server.user.app.port.out.UserQueryPort;
+import com.magambell.server.user.domain.enums.SignupSource;
 import com.magambell.server.user.domain.enums.UserRole;
 import com.magambell.server.user.domain.entity.User;
 import java.util.List;
@@ -120,8 +121,13 @@ public class AuthService implements AuthUseCase {
     }
 
     private User oAuthSignUp(final OAuthUserInfo userInfo, final SocialLoginServiceRequest request) {
+        validateSignupSource(request.signupSource(), request.signupSourceDetail());
         validateSignUpFields(request.nickName(), request.userRole(), request.phoneNumber());
         validateUserRole(request.userRole());
+
+        String signupSourceDetail = request.signupSource() == SignupSource.OTHER
+                ? request.signupSourceDetail().trim()
+                : null;
 
         UserSocialAccountDTO userSocialAccountDTO = new UserSocialAccountDTO(userInfo.email(),
                 request.name(),
@@ -129,7 +135,9 @@ public class AuthService implements AuthUseCase {
                 request.phoneNumber(),
                 userInfo.providerType(),
                 userInfo.id(),
-                request.userRole());
+                request.userRole(),
+                request.signupSource(),
+                signupSourceDetail);
 
         return userCommandPort.registerBySocial(userSocialAccountDTO);
     }
@@ -150,6 +158,21 @@ public class AuthService implements AuthUseCase {
 //        if (!phoneNumber.matches("^(?!.*-)[0-9]{10,11}$")) {
 //            throw new InvalidRequestException(ErrorCode.USER_VALID_PHONE);
 //        }
+    }
+
+    private void validateSignupSource(final SignupSource signupSource, final String signupSourceDetail) {
+        if (signupSource == null) {
+            throw new InvalidRequestException(ErrorCode.INVALID_SIGNUP_SOURCE);
+        }
+
+        if (signupSource == SignupSource.OTHER) {
+            if (signupSourceDetail == null || signupSourceDetail.isBlank()
+                    || signupSourceDetail.length() > 100) {
+                throw new InvalidRequestException(ErrorCode.INVALID_SIGNUP_SOURCE_DETAIL);
+            }
+        } else if (signupSourceDetail != null && !signupSourceDetail.isBlank()) {
+            throw new InvalidRequestException(ErrorCode.INVALID_SIGNUP_SOURCE_DETAIL);
+        }
     }
 
     private void validateUserRole(final UserRole userRole) {
