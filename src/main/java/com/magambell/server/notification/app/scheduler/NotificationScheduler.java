@@ -24,4 +24,9 @@ public class NotificationScheduler {
             notificationUseCase.notifyPickup(pickupTime);
         }
     }
+
+    @Scheduled(cron = "0 0 10 * * *", zone = "Asia/Seoul")
+    public void notificationDailyOwnerReviewSummary() {
+        notificationUseCase.notifyDailyOwnerReviewSummary();
+    }
 }
