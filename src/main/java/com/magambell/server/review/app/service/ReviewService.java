@@ -7,6 +7,8 @@ import com.magambell.server.common.exception.NotFoundException;
 import com.magambell.server.order.app.port.out.OrderQueryPort;
 import com.magambell.server.order.domain.entity.OrderGoods;
 import com.magambell.server.order.domain.enums.OrderStatus;
+import com.magambell.server.notification.app.port.in.NotificationUseCase;
+import com.magambell.server.notification.app.port.in.request.NotifyReviewReplyRequest;
 import com.magambell.server.review.adapter.out.persistence.ReviewStoreResponse;
 import com.magambell.server.review.app.port.in.ReviewUseCase;
 import com.magambell.server.review.app.port.in.dto.ReportReviewDTO;
@@ -41,6 +43,7 @@ public class ReviewService implements ReviewUseCase {
     private final UserQueryPort userQueryPort;
     private final OrderQueryPort orderQueryPort;
     private final StoreQueryPort storeQueryPort;
+    private final NotificationUseCase notificationUseCase;
 
     @Transactional
     @Override
@@ -120,6 +123,9 @@ public class ReviewService implements ReviewUseCase {
 
         validateReviewOwner(user, review);
         reviewCommandPort.saveReviewReply(review.addReviewReply(request.content().trim()));
+
+        Store store = review.getOrderGoods().getGoods().getStore();
+        notificationUseCase.notifyReviewReply(new NotifyReviewReplyRequest(review.getUser(), store));
     }
 
     @Transactional

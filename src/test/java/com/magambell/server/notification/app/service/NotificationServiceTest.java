@@ -1,15 +1,22 @@
 package com.magambell.server.notification.app.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
+import com.google.firebase.messaging.FirebaseMessagingException;
 import com.magambell.server.auth.domain.ProviderType;
 import com.magambell.server.goods.domain.repository.GoodsRepository;
 import com.magambell.server.notification.app.port.in.request.SaveFcmTokenServiceRequest;
 import com.magambell.server.notification.app.port.in.request.DeleteStoreOpenFcmTokenServiceRequest;
+import com.magambell.server.notification.app.port.in.request.NotifyReviewReplyRequest;
 import com.magambell.server.notification.app.port.in.request.SaveStoreOpenFcmTokenServiceRequest;
 import com.magambell.server.notification.adapter.in.web.CheckStoreOpenServiceRequest;
 import com.magambell.server.notification.domain.entity.FcmToken;
 import com.magambell.server.notification.domain.repository.FcmTokenRepository;
+import com.magambell.server.notification.infra.FirebaseNotificationSender;
 import com.magambell.server.stock.domain.repository.StockHistoryRepository;
 import com.magambell.server.stock.domain.repository.StockRepository;
 import com.magambell.server.store.app.port.in.dto.RegisterStoreDTO;
@@ -23,12 +30,14 @@ import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.repository.UserRepository;
 import com.magambell.server.user.domain.repository.UserSocialAccountRepository;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 
 @ActiveProfiles("test")
@@ -58,6 +67,9 @@ class NotificationServiceTest {
 
     @Autowired
     private StockHistoryRepository stockHistoryRepository;
+
+    @MockBean
+    private FirebaseNotificationSender firebaseNotificationSender;
 
     private User user;
     private Store store;
@@ -215,6 +227,59 @@ class NotificationServiceTest {
         assertThat(subscriberCount).isEqualTo(2L);
     }
 
+    @DisplayName("리뷰 작성자에게 확정된 문구로 답글 알림을 전송한다.")
+    @Test
+    void notifyReviewReply() throws FirebaseMessagingException {
+        // given
+        User customer = createAndSaveCustomer();
+        notificationService.saveToken(new SaveFcmTokenServiceRequest("customer-token", customer.getId()));
+
+        // when
+        notificationService.notifyReviewReply(new NotifyReviewReplyRequest(customer, store));
+
+        // then
+        verify(firebaseNotificationSender).send(
+                "customer-token",
+                "답글이 달렸어요",
+                "테스트 매장에서 회원님의 리뷰에 답글을 남겼어요. 확인해보세요!",
+                Map.of()
+        );
+    }
+
+    @DisplayName("리뷰 작성자의 FCM 토큰이 없으면 답글 알림을 전송하지 않는다.")
+    @Test
+    void notifyReviewReplyWithoutToken() {
+        // given
+        User customer = createAndSaveCustomer();
+
+        // when
+        notificationService.notifyReviewReply(new NotifyReviewReplyRequest(customer, store));
+
+        // then
+        verifyNoInteractions(firebaseNotificationSender);
+    }
+
+    @DisplayName("리뷰 답글 알림 전송에 실패하면 기존 정책에 따라 FCM 토큰을 삭제한다.")
+    @Test
+    void notifyReviewReplyRemovesTokenWhenFcmFails() throws FirebaseMessagingException {
+        // given
+        User customer = createAndSaveCustomer();
+        notificationService.saveToken(new SaveFcmTokenServiceRequest("invalid-token", customer.getId()));
+        FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
+        doThrow(exception).when(firebaseNotificationSender).send(
+                "invalid-token",
+                "답글이 달렸어요",
+                "테스트 매장에서 회원님의 리뷰에 답글을 남겼어요. 확인해보세요!",
+                Map.of()
+        );
+
+        // when
+        notificationService.notifyReviewReply(new NotifyReviewReplyRequest(customer, store));
+
+        // then
+        assertThat(fcmTokenRepository.findByUserId(customer.getId())).isEmpty();
+    }
+
     private User createAndSaveUser(final String email, final String socialId, final String nickName,
             final String phoneNumber) {
         UserSocialAccountDTO userSocialAccountDTO = new UserSocialAccountDTO(
@@ -229,5 +294,20 @@ class NotificationServiceTest {
         User anotherUser = userSocialAccountDTO.toUser();
         anotherUser.addUserSocialAccount(userSocialAccountDTO.toUserSocialAccount());
         return userRepository.save(anotherUser);
+    }
+
+    private User createAndSaveCustomer() {
+        UserSocialAccountDTO customerAccountDTO = new UserSocialAccountDTO(
+                "customer@test.com",
+                "고객",
+                "고객닉네임",
+                "01022223333",
+                ProviderType.KAKAO,
+                "customerSocialId",
+                UserRole.CUSTOMER
+        );
+        User customer = customerAccountDTO.toUser();
+        customer.addUserSocialAccount(customerAccountDTO.toUserSocialAccount());
+        return userRepository.save(customer);
     }
 }

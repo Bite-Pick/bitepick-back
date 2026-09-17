@@ -6,6 +6,7 @@ import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.notification.adapter.in.web.CheckStoreOpenServiceRequest;
 import com.magambell.server.notification.app.port.in.NotificationUseCase;
 import com.magambell.server.notification.app.port.in.request.DeleteStoreOpenFcmTokenServiceRequest;
+import com.magambell.server.notification.app.port.in.request.NotifyReviewReplyRequest;
 import com.magambell.server.notification.app.port.in.request.NotifyStoreOpenRequest;
 import com.magambell.server.notification.app.port.in.request.SaveFcmTokenServiceRequest;
 import com.magambell.server.notification.app.port.in.request.SaveStoreOpenFcmTokenServiceRequest;
@@ -49,6 +50,8 @@ public class NotificationService implements NotificationUseCase {
     private static final String STORE_APPROVED_TITLE = "🎉 바이트픽 가입 심사 완료!";
     private static final String STORE_APPROVED_BODY = "지금 바로 바이트백 판매를 시작해보세요 ✅";
     private static final String NEW_SIGNUP_REVIEW_BODY = "새 가입 매장을 검토해주세요!";
+    private static final String REVIEW_REPLY_TITLE = "💬답글이 달렸어요";
+    private static final String REVIEW_REPLY_BODY = "%s에서 회원님의 리뷰에 답글을 남겼어요. 확인해보세요!";
 
     private final NotificationCommandPort notificationCommandPort;
     private final NotificationQueryPort notificationQueryPort;
@@ -265,6 +268,20 @@ public class NotificationService implements NotificationUseCase {
         }
 
         send(STORE_APPROVED_TITLE, STORE_APPROVED_BODY, token);
+    }
+
+    @Override
+    public void notifyReviewReply(final NotifyReviewReplyRequest request) {
+        User reviewAuthor = request.reviewAuthor();
+        FcmTokenDTO token = notificationQueryPort.findWithAllByUserIdAndStoreIsNull(reviewAuthor);
+        if (token == null) {
+            log.info("리뷰 답글 알림 대상 토큰 없음 - userId: {}, storeId: {}",
+                    reviewAuthor.getId(), request.store().getId());
+            return;
+        }
+
+        String message = REVIEW_REPLY_BODY.formatted(request.store().getName());
+        send(REVIEW_REPLY_TITLE, message, token);
     }
 
     private void send(final String message, final FcmTokenDTO token) {

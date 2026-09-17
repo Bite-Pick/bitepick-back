@@ -3,6 +3,10 @@ package com.magambell.server.review.app.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import com.magambell.server.auth.domain.ProviderType;
 import com.magambell.server.common.enums.ErrorCode;
@@ -13,6 +17,8 @@ import com.magambell.server.goods.adapter.in.web.GoodsImagesRegister;
 import com.magambell.server.goods.app.port.in.dto.RegisterGoodsDTO;
 import com.magambell.server.goods.domain.entity.Goods;
 import com.magambell.server.goods.domain.repository.GoodsRepository;
+import com.magambell.server.notification.app.port.in.NotificationUseCase;
+import com.magambell.server.notification.app.port.in.request.NotifyReviewReplyRequest;
 import com.magambell.server.order.app.port.in.dto.CreateOrderDTO;
 import com.magambell.server.order.domain.entity.Order;
 import com.magambell.server.order.domain.entity.OrderGoods;
@@ -68,6 +74,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 
 @ActiveProfiles("test")
@@ -106,6 +113,8 @@ class ReviewServiceTest {
     private OrderGoodsRepository orderGoodsRepository;
     @Autowired
     private PaymentRepository paymentRepository;
+    @MockBean
+    private NotificationUseCase notificationUseCase;
     private User user;
     private User owner;
     private Goods goods;
@@ -348,6 +357,36 @@ class ReviewServiceTest {
         assertThat(reply.getReview().getId()).isEqualTo(review.getId());
         assertThat(reply.getContent()).isEqualTo("방문해 주셔서 감사합니다.");
         assertThat(reply.getReplyStatus()).isEqualTo(ReviewReplyStatus.ACTIVE);
+        verify(notificationUseCase).notifyReviewReply(argThat(notificationRequest ->
+                notificationRequest.reviewAuthor().getId().equals(user.getId())
+                        && notificationRequest.store().getId().equals(goods.getStore().getId())
+        ));
+    }
+
+    @DisplayName("삭제된 답글을 재등록하면 고객 알림을 다시 호출한다.")
+    @Test
+    void registerReviewReply_notifiesCustomerWhenReplyRestored() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "첫 번째 답글"
+        ));
+        reviewService.deleteReviewReply(new DeleteReviewReplyServiceRequest(review.getId(), owner.getId()));
+
+        // when
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "다시 작성한 답글"
+        ));
+
+        // then
+        ReviewReply reply = reviewReplyRepository.findAll().get(0);
+        assertThat(reply.getReplyStatus()).isEqualTo(ReviewReplyStatus.ACTIVE);
+        assertThat(reply.getContent()).isEqualTo("다시 작성한 답글");
+        verify(notificationUseCase, times(2)).notifyReviewReply(any(NotifyReviewReplyRequest.class));
     }
 
     @DisplayName("이미 ACTIVE 답글이 있으면 중복 답글 작성에 실패한다.")
