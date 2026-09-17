@@ -18,12 +18,16 @@ import com.magambell.server.notification.infra.FirebaseNotificationSender;
 import com.magambell.server.order.app.port.out.OrderQueryPort;
 import com.magambell.server.order.domain.entity.Order;
 import com.magambell.server.order.domain.entity.OrderGoods;
+import com.magambell.server.review.app.port.out.ReviewQueryPort;
+import com.magambell.server.review.app.port.out.response.OwnerReviewCountDTO;
 import com.magambell.server.store.app.port.out.StoreQueryPort;
 import com.magambell.server.store.domain.entity.Store;
 import com.magambell.server.user.app.port.out.UserQueryPort;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.enums.UserRole;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,6 +56,9 @@ public class NotificationService implements NotificationUseCase {
     private static final String NEW_SIGNUP_REVIEW_BODY = "새 가입 매장을 검토해주세요!";
     private static final String REVIEW_REPLY_TITLE = "💬답글이 달렸어요";
     private static final String REVIEW_REPLY_BODY = "%s에서 회원님의 리뷰에 답글을 남겼어요. 확인해보세요!";
+    private static final String OWNER_REVIEW_SUMMARY_TITLE = "🔔새 리뷰가 도착했어요";
+    private static final String OWNER_REVIEW_SUMMARY_BODY = "리뷰 %d개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요🍞";
+    private static final ZoneId ASIA_SEOUL = ZoneId.of("Asia/Seoul");
 
     private final NotificationCommandPort notificationCommandPort;
     private final NotificationQueryPort notificationQueryPort;
@@ -59,6 +66,7 @@ public class NotificationService implements NotificationUseCase {
     private final StoreQueryPort storeQueryPort;
     private final UserQueryPort userQueryPort;
     private final OrderQueryPort orderQueryPort;
+    private final ReviewQueryPort reviewQueryPort;
 
     @Transactional
     @Override
@@ -282,6 +290,58 @@ public class NotificationService implements NotificationUseCase {
 
         String message = REVIEW_REPLY_BODY.formatted(request.store().getName());
         send(REVIEW_REPLY_TITLE, message, token);
+    }
+
+    @Override
+    public void notifyDailyOwnerReviewSummary() {
+        notifyDailyOwnerReviewSummary(LocalDate.now(ASIA_SEOUL));
+    }
+
+    void notifyDailyOwnerReviewSummary(final LocalDate today) {
+        LocalDateTime startAt = today.minusDays(1).atStartOfDay();
+        LocalDateTime endAt = today.atStartOfDay();
+        List<OwnerReviewCountDTO> reviewCounts = reviewQueryPort.getOwnerReviewCounts(startAt, endAt);
+
+        if (reviewCounts.isEmpty()) {
+            log.info("사장님 리뷰 묶음 알림 대상 없음 - startAt: {}, endAt: {}", startAt, endAt);
+            return;
+        }
+
+        Map<Long, Long> reviewCountByOwnerId = reviewCounts.stream()
+                .filter(reviewCount -> reviewCount.reviewCount() != null && reviewCount.reviewCount() > 0)
+                .collect(Collectors.toMap(
+                        OwnerReviewCountDTO::ownerId,
+                        OwnerReviewCountDTO::reviewCount,
+                        Long::sum
+                ));
+        if (reviewCountByOwnerId.isEmpty()) {
+            log.info("사장님 리뷰 묶음 알림 대상 없음 - startAt: {}, endAt: {}", startAt, endAt);
+            return;
+        }
+
+        List<Long> ownerIds = reviewCountByOwnerId.keySet().stream().toList();
+        Map<Long, FcmTokenDTO> tokenByOwnerId = notificationQueryPort
+                .findWithAllByOwnerIdsAndStoreIsNull(ownerIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        FcmTokenDTO::userId,
+                        Function.identity(),
+                        (first, second) -> first
+                ));
+
+        reviewCountByOwnerId.forEach((ownerId, reviewCount) -> {
+            FcmTokenDTO token = tokenByOwnerId.get(ownerId);
+            if (token == null) {
+                log.info("사장님 리뷰 묶음 알림 대상 토큰 없음 - ownerId: {}, reviewCount: {}",
+                        ownerId, reviewCount);
+                return;
+            }
+
+            String message = OWNER_REVIEW_SUMMARY_BODY.formatted(reviewCount);
+            log.info("사장님 리뷰 묶음 알림 전송 - ownerId: {}, reviewCount: {}",
+                    ownerId, reviewCount);
+            send(OWNER_REVIEW_SUMMARY_TITLE, message, token);
+        });
     }
 
     private void send(final String message, final FcmTokenDTO token) {

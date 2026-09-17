@@ -39,4 +39,6 @@ public interface NotificationUseCase {
     void notifyStoreApproved(User user);
 
     void notifyReviewReply(NotifyReviewReplyRequest request);
+
+    void notifyDailyOwnerReviewSummary();
 }
