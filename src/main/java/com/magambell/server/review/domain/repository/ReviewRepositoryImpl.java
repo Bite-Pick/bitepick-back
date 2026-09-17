@@ -4,6 +4,7 @@ import com.magambell.server.order.domain.enums.OrderStatus;
 import com.magambell.server.review.app.port.in.request.ReviewListServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewRatingAllServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewStoreServiceRequest;
+import com.magambell.server.review.app.port.out.response.OwnerReviewCountDTO;
 import com.magambell.server.review.app.port.out.response.ReviewListDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRatingSummaryDTO;
 import com.magambell.server.review.app.port.out.response.ReviewReplyDTO;
@@ -13,8 +14,10 @@ import com.magambell.server.review.domain.enums.ReviewReplyStatus;
 import com.magambell.server.review.domain.enums.ReviewStatus;
 import com.magambell.server.review.domain.enums.ReviewStoreFilter;
 import com.magambell.server.user.domain.enums.UserStatus;
+import com.magambell.server.user.domain.entity.QUser;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberPath;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -259,6 +262,33 @@ public class ReviewRepositoryImpl implements ReviewRepositoryCustom {
                 totalCount == null ? 0L : totalCount,
                 noReplyCount == null ? 0L : noReplyCount
         );
+    }
+
+    @Override
+    public List<OwnerReviewCountDTO> getOwnerReviewCounts(final LocalDateTime startAt,
+                                                          final LocalDateTime endAt) {
+        QUser owner = new QUser("owner");
+
+        return queryFactory
+                .select(Projections.constructor(
+                        OwnerReviewCountDTO.class,
+                        owner.id,
+                        store.id,
+                        review.id.count()
+                ))
+                .from(review)
+                .innerJoin(orderGoods).on(orderGoods.id.eq(review.orderGoods.id))
+                .innerJoin(goods).on(goods.id.eq(orderGoods.goods.id))
+                .innerJoin(store).on(store.id.eq(goods.store.id))
+                .innerJoin(owner).on(owner.id.eq(store.user.id))
+                .where(
+                        review.createdAt.goe(startAt),
+                        review.createdAt.lt(endAt),
+                        review.reviewStatus.eq(ReviewStatus.ACTIVE)
+                )
+                .groupBy(owner.id, store.id)
+                .orderBy(owner.id.asc())
+                .fetch();
     }
 
     private List<ReviewListDTO> getReviewListDTOS(final Pageable pageable, final BooleanBuilder conditions, final Long userId) {
