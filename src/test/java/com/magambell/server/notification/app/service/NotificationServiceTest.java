@@ -252,7 +252,7 @@ class NotificationServiceTest {
         // then
         verify(firebaseNotificationSender).send(
                 "customer-token",
-                "답글이 달렸어요",
+                "💬답글이 달렸어요",
                 "테스트 매장에서 회원님의 리뷰에 답글을 남겼어요. 확인해보세요!",
                 Map.of()
         );
@@ -280,7 +280,7 @@ class NotificationServiceTest {
         FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
         doThrow(exception).when(firebaseNotificationSender).send(
                 "invalid-token",
-                "답글이 달렸어요",
+                "💬답글이 달렸어요",
                 "테스트 매장에서 회원님의 리뷰에 답글을 남겼어요. 확인해보세요!",
                 Map.of()
         );
@@ -341,14 +341,14 @@ class NotificationServiceTest {
         // then
         verify(firebaseNotificationSender).send(
                 "owner-token",
-                "새 리뷰가 도착했어요",
-                "리뷰 3개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요",
+                "🔔새 리뷰가 도착했어요",
+                "리뷰 3개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요🍞",
                 Map.of()
         );
         verify(firebaseNotificationSender).send(
                 "other-owner-token",
-                "새 리뷰가 도착했어요",
-                "리뷰 2개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요",
+                "🔔새 리뷰가 도착했어요",
+                "리뷰 2개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요🍞",
                 Map.of()
         );
     }
@@ -385,8 +385,8 @@ class NotificationServiceTest {
         FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
         doThrow(exception).when(firebaseNotificationSender).send(
                 "failed-owner-token",
-                "새 리뷰가 도착했어요",
-                "리뷰 1개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요",
+                "🔔새 리뷰가 도착했어요",
+                "리뷰 1개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요🍞",
                 Map.of()
         );
 
@@ -396,8 +396,8 @@ class NotificationServiceTest {
         // then
         verify(firebaseNotificationSender).send(
                 "success-owner-token",
-                "새 리뷰가 도착했어요",
-                "리뷰 2개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요",
+                "🔔새 리뷰가 도착했어요",
+                "리뷰 2개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요🍞",
                 Map.of()
         );
         assertThat(fcmTokenRepository.findByUserId(user.getId())).isEmpty();
