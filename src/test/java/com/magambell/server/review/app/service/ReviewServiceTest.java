@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.magambell.server.auth.domain.ProviderType;
 import com.magambell.server.common.enums.ErrorCode;
@@ -80,6 +81,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.transaction.TestTransaction;
+import org.springframework.transaction.annotation.Transactional;
 
 @ActiveProfiles("test")
 @SpringBootTest
@@ -347,6 +350,7 @@ class ReviewServiceTest {
     }
 
     @DisplayName("사장님이 본인 매장 리뷰에 답글을 작성한다.")
+    @Transactional
     @Test
     void registerReviewReply() {
         // given
@@ -365,10 +369,38 @@ class ReviewServiceTest {
         assertThat(reply.getReview().getId()).isEqualTo(review.getId());
         assertThat(reply.getContent()).isEqualTo("방문해 주셔서 감사합니다.");
         assertThat(reply.getReplyStatus()).isEqualTo(ReviewReplyStatus.ACTIVE);
+        verifyNoInteractions(notificationUseCase);
+
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
         verify(notificationUseCase).notifyReviewReply(argThat(notificationRequest ->
                 notificationRequest.reviewAuthor().getId().equals(user.getId())
                         && notificationRequest.store().getId().equals(goods.getStore().getId())
         ));
+    }
+
+    @DisplayName("답글 트랜잭션이 롤백되면 고객 알림을 호출하지 않는다.")
+    @Transactional
+    @Test
+    void registerReviewReplyDoesNotNotifyCustomerAfterRollback() {
+        // given
+        Review review = saveReview();
+        RegisterReviewReplyServiceRequest request = new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "방문해 주셔서 감사합니다."
+        );
+
+        // when
+        reviewService.registerReviewReply(request);
+        verifyNoInteractions(notificationUseCase);
+
+        TestTransaction.flagForRollback();
+        TestTransaction.end();
+
+        // then
+        verifyNoInteractions(notificationUseCase);
     }
 
     @DisplayName("삭제된 답글을 재등록하면 고객 알림을 다시 호출한다.")
