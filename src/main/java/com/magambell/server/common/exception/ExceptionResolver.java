@@ -1,11 +1,13 @@
 package com.magambell.server.common.exception;
 
 import com.magambell.server.common.ErrorResponse;
+import com.magambell.server.common.enums.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -55,6 +57,24 @@ public class ExceptionResolver {
                         .statusCode(400)
                         .code("INVALID_REQUEST_BODY")
                         .message("요청 본문 값이 올바르지 않습니다.")
+                        .path(request.getRequestURI())
+                        .build());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ErrorResponse> handleAccessDeniedException(AccessDeniedException e,
+                                                                     HttpServletRequest request) {
+        ErrorCode errorCode = ErrorCode.ACCESS_DENIED;
+        log.warn("Access denied: method={}, path={}, message={}",
+                request.getMethod(), request.getRequestURI(), e.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(ErrorResponse.builder()
+                        .statusCode(HttpStatus.FORBIDDEN.value())
+                        .name(AccessDeniedException.class.getSimpleName())
+                        .code(errorCode.name())
+                        .message(errorCode.getMessage())
                         .path(request.getRequestURI())
                         .build());
     }
