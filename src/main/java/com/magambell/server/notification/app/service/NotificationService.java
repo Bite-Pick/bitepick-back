@@ -1,6 +1,7 @@
 package com.magambell.server.notification.app.service;
 
 import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.MessagingErrorCode;
 import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.notification.adapter.in.web.CheckStoreOpenServiceRequest;
@@ -366,7 +367,14 @@ public class NotificationService implements NotificationUseCase {
     }
 
     private void fcmFail(final FirebaseMessagingException e, final FcmTokenDTO token) {
-        log.warn("FCM 알림 전송 실패. tokenId={}, reason={}", token.fcmTokenId(), e.getMessage());
+        MessagingErrorCode errorCode = e.getMessagingErrorCode();
+        log.warn("FCM 알림 전송 실패. tokenId={}, errorCode={}, reason={}",
+                token.fcmTokenId(), errorCode, e.getMessage());
+
+        if (errorCode != MessagingErrorCode.UNREGISTERED) {
+            return;
+        }
+
         try {
             notificationCommandPort.removeToken(token.fcmTokenId());
         } catch (org.springframework.orm.ObjectOptimisticLockingFailureException | org.hibernate.StaleObjectStateException ex) {

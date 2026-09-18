@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.MessagingErrorCode;
 import com.magambell.server.auth.domain.ProviderType;
 import com.magambell.server.goods.domain.repository.GoodsRepository;
 import com.magambell.server.notification.app.port.in.request.SaveFcmTokenServiceRequest;
@@ -271,13 +272,14 @@ class NotificationServiceTest {
         verifyNoInteractions(firebaseNotificationSender);
     }
 
-    @DisplayName("리뷰 답글 알림 전송에 실패하면 기존 정책에 따라 FCM 토큰을 삭제한다.")
+    @DisplayName("리뷰 답글 알림 전송 시 토큰이 등록 해제된 경우 FCM 토큰을 삭제한다.")
     @Test
-    void notifyReviewReplyRemovesTokenWhenFcmFails() throws FirebaseMessagingException {
+    void notifyReviewReplyRemovesTokenWhenTokenIsUnregistered() throws FirebaseMessagingException {
         // given
         User customer = createAndSaveCustomer();
         notificationService.saveToken(new SaveFcmTokenServiceRequest("invalid-token", customer.getId()));
         FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
+        when(exception.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNREGISTERED);
         doThrow(exception).when(firebaseNotificationSender).send(
                 "invalid-token",
                 "💬답글이 달렸어요",
@@ -290,6 +292,28 @@ class NotificationServiceTest {
 
         // then
         assertThat(fcmTokenRepository.findByUserId(customer.getId())).isEmpty();
+    }
+
+    @DisplayName("리뷰 답글 알림 전송 시 FCM이 일시적으로 불가하면 토큰을 유지한다.")
+    @Test
+    void notifyReviewReplyKeepsTokenWhenFcmIsUnavailable() throws FirebaseMessagingException {
+        // given
+        User customer = createAndSaveCustomer();
+        notificationService.saveToken(new SaveFcmTokenServiceRequest("valid-token", customer.getId()));
+        FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
+        when(exception.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNAVAILABLE);
+        doThrow(exception).when(firebaseNotificationSender).send(
+                "valid-token",
+                "💬답글이 달렸어요",
+                "테스트 매장에서 회원님의 리뷰에 답글을 남겼어요. 확인해보세요!",
+                Map.of()
+        );
+
+        // when
+        notificationService.notifyReviewReply(new NotifyReviewReplyRequest(customer, store));
+
+        // then
+        assertThat(fcmTokenRepository.findByUserId(customer.getId())).hasSize(1);
     }
 
     @DisplayName("KST 기준 전날 리뷰가 없으면 사장님 묶음 알림을 전송하지 않는다.")
@@ -383,6 +407,7 @@ class NotificationServiceTest {
                         new OwnerReviewCountDTO(otherOwner.getId(), 999L, 2L)
                 ));
         FirebaseMessagingException exception = mock(FirebaseMessagingException.class);
+        when(exception.getMessagingErrorCode()).thenReturn(MessagingErrorCode.UNREGISTERED);
         doThrow(exception).when(firebaseNotificationSender).send(
                 "failed-owner-token",
                 "🔔새 리뷰가 도착했어요",
