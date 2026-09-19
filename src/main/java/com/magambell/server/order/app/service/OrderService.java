@@ -20,13 +20,16 @@ import com.magambell.server.order.app.port.out.response.CreateOrderResponseDTO;
 import java.time.LocalTime;
 import com.magambell.server.order.app.port.out.response.OrderDetailDTO;
 import com.magambell.server.order.app.port.out.response.OrderListDTO;
+import com.magambell.server.order.app.port.out.response.OrderStoreSalesSummaryDTO;
 import com.magambell.server.order.app.port.out.response.OrderStoreListDTO;
 import com.magambell.server.order.domain.entity.Order;
 import com.magambell.server.order.domain.enums.OrderStatus;
 import com.magambell.server.order.domain.enums.RejectReason;
 import com.magambell.server.payment.app.port.in.dto.CreatePaymentDTO;
 import com.magambell.server.payment.app.port.out.PaymentCommandPort;
+import com.magambell.server.payment.app.port.out.PaymentQueryPort;
 import com.magambell.server.payment.app.port.out.PortOnePort;
+import com.magambell.server.payment.app.port.out.response.StoreSalesSummaryDTO;
 import com.magambell.server.payment.domain.entity.Payment;
 import com.magambell.server.payment.domain.enums.PaymentCompletionType;
 import com.magambell.server.stock.app.port.in.StockUseCase;
@@ -34,8 +37,11 @@ import com.magambell.server.stock.app.port.out.StockCommandPort;
 import com.magambell.server.stock.app.port.out.StockQueryPort;
 import com.magambell.server.stock.domain.entity.Stock;
 import com.magambell.server.stock.domain.entity.StockHistory;
+import com.magambell.server.store.app.port.out.StoreQueryPort;
+import com.magambell.server.store.domain.entity.Store;
 import com.magambell.server.user.app.port.out.UserQueryPort;
 import com.magambell.server.user.domain.entity.User;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -67,6 +73,8 @@ public class OrderService implements OrderUseCase {
     private final PaymentCommandPort paymentCommandPort;
     private final StockQueryPort stockQueryPort;
     private final StockUseCase stockUseCase;
+    private final PaymentQueryPort paymentQueryPort;
+    private final StoreQueryPort storeQueryPort;
     private final PortOnePort portOnePort;
     private final NotificationUseCase notificationUseCase;
 
@@ -110,6 +118,26 @@ public class OrderService implements OrderUseCase {
         User user = userQueryPort.findById(userId);
         return orderQueryPort.getOrderStoreList(PageRequest.of(request.page() - 1, request.size()), user.getId()
                 , request.orderStatus());
+    }
+
+    @Override
+    public OrderStoreSalesSummaryDTO getStoreSalesSummary(final Long userId, final LocalDateTime calculatedAt) {
+        User user = userQueryPort.findById(userId);
+        Store store = storeQueryPort.getStoreByUser(user)
+                .orElseThrow(() -> new NotFoundException(ErrorCode.STORE_NOT_FOUND));
+        LocalDate monthStartDate = calculatedAt.toLocalDate().withDayOfMonth(1);
+        StoreSalesSummaryDTO summary = paymentQueryPort.getStoreSalesSummary(
+                store.getId(), monthStartDate.atStartOfDay(), calculatedAt);
+
+        return new OrderStoreSalesSummaryDTO(
+                summary.totalAmount(),
+                summary.totalOrderCount(),
+                summary.monthlyAmount(),
+                summary.monthlyOrderCount(),
+                monthStartDate,
+                summary.firstSoldAt(),
+                calculatedAt
+        );
     }
 
     @Transactional

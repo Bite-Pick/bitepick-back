@@ -7,6 +7,7 @@ import com.magambell.server.order.app.port.in.request.RejectOrderServiceRequest;
 import com.magambell.server.order.app.port.out.response.CreateOrderResponseDTO;
 import com.magambell.server.order.app.port.out.response.OrderDetailDTO;
 import com.magambell.server.order.app.port.out.response.OrderListDTO;
+import com.magambell.server.order.app.port.out.response.OrderStoreSalesSummaryDTO;
 import com.magambell.server.order.app.port.out.response.OrderStoreListDTO;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,6 +20,8 @@ public interface OrderUseCase {
     OrderDetailDTO getOrderDetail(Long orderId, Long userId);
 
     List<OrderStoreListDTO> getOrderStoreList(OwnerOrderListServiceRequest request, Long userId);
+
+    OrderStoreSalesSummaryDTO getStoreSalesSummary(Long userId, LocalDateTime calculatedAt);
 
     void approveOrder(Long orderId, Long userId, LocalDateTime now);
 
