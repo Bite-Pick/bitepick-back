@@ -11,17 +11,20 @@ import com.magambell.server.order.adapter.out.persistence.CreateOrderResponse;
 import com.magambell.server.order.adapter.out.persistence.OrderDetailResponse;
 import com.magambell.server.order.adapter.out.persistence.OrderListResponse;
 import com.magambell.server.order.adapter.out.persistence.OrderStoreListResponse;
+import com.magambell.server.order.adapter.out.persistence.OrderStoreSalesSummaryResponse;
 import com.magambell.server.order.app.port.in.OrderUseCase;
 import com.magambell.server.order.app.port.out.response.CreateOrderResponseDTO;
 import com.magambell.server.order.app.port.out.response.OrderDetailDTO;
 import com.magambell.server.order.app.port.out.response.OrderListDTO;
 import com.magambell.server.order.app.port.out.response.OrderStoreListDTO;
+import com.magambell.server.order.app.port.out.response.OrderStoreSalesSummaryDTO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +45,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/order")
 @RestController
 public class OrderController {
+
+    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
 
     private final OrderUseCase orderUseCase;
 
@@ -110,6 +115,23 @@ public class OrderController {
         List<OrderStoreListDTO> orderStoreList = orderUseCase.getOrderStoreList(request.toService(),
                 customUserDetails.userId());
         return new Response<>(new OrderStoreListResponse(orderStoreList));
+    }
+
+    @PreAuthorize("hasRole('OWNER')")
+    @Operation(
+            summary = "사장님 매출 요약",
+            description = "결제 완료 상태를 유지하는 주문의 전체 및 이번 달 매출을 조회합니다."
+    )
+    @ApiResponse(responseCode = "200", content = {
+            @Content(schema = @Schema(implementation = OrderStoreSalesSummaryResponse.class))})
+    @GetMapping("/store/sales/summary")
+    public Response<OrderStoreSalesSummaryResponse> getStoreSalesSummary(
+            @AuthenticationPrincipal final CustomUserDetails customUserDetails
+    ) {
+        LocalDateTime calculatedAt = LocalDateTime.now(SEOUL);
+        OrderStoreSalesSummaryDTO summary = orderUseCase.getStoreSalesSummary(
+                customUserDetails.userId(), calculatedAt);
+        return new Response<>(summary.toResponse());
     }
 
     @PreAuthorize("hasRole('OWNER')")
