@@ -9,6 +9,7 @@ import com.magambell.server.review.app.port.in.request.ReviewRatingAllServiceReq
 import com.magambell.server.review.app.port.in.request.ReviewReportListServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewStoreServiceRequest;
 import com.magambell.server.review.app.port.out.ReviewQueryPort;
+import com.magambell.server.review.app.port.out.response.OwnerReviewCountDTO;
 import com.magambell.server.review.app.port.out.response.ReviewListDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRatingSummaryDTO;
 import com.magambell.server.review.app.port.out.response.ReviewReportListDTO;
@@ -19,6 +20,7 @@ import com.magambell.server.review.domain.entity.Review;
 import com.magambell.server.review.domain.repository.ReviewReportRepository;
 import com.magambell.server.review.domain.repository.ReviewRepository;
 import com.magambell.server.user.domain.entity.User;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
@@ -76,6 +78,12 @@ public class ReviewQueryAdapter implements ReviewQueryPort {
     @Override
     public List<ReviewReportListDTO> getReviewReportList(final ReviewReportListServiceRequest request, final Pageable pageable) {
         return reviewReportRepository.getReviewReportList(request, pageable);
+    }
+
+    @Override
+    public List<OwnerReviewCountDTO> getOwnerReviewCounts(final LocalDateTime startAt,
+                                                          final LocalDateTime endAt) {
+        return reviewRepository.getOwnerReviewCounts(startAt, endAt);
     }
 
 }

@@ -8,6 +8,7 @@ import com.magambell.server.order.app.port.out.OrderQueryPort;
 import com.magambell.server.order.domain.entity.OrderGoods;
 import com.magambell.server.order.domain.enums.OrderStatus;
 import com.magambell.server.review.adapter.out.persistence.ReviewStoreResponse;
+import com.magambell.server.review.app.event.ReviewReplyRegisteredEvent;
 import com.magambell.server.review.app.port.in.ReviewUseCase;
 import com.magambell.server.review.app.port.in.dto.ReportReviewDTO;
 import com.magambell.server.review.app.port.in.request.*;
@@ -25,6 +26,7 @@ import com.magambell.server.user.app.port.out.UserQueryPort;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.enums.UserRole;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +43,7 @@ public class ReviewService implements ReviewUseCase {
     private final UserQueryPort userQueryPort;
     private final OrderQueryPort orderQueryPort;
     private final StoreQueryPort storeQueryPort;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     @Override
@@ -120,6 +123,13 @@ public class ReviewService implements ReviewUseCase {
 
         validateReviewOwner(user, review);
         reviewCommandPort.saveReviewReply(review.addReviewReply(request.content().trim()));
+
+        Store store = review.getOrderGoods().getGoods().getStore();
+        eventPublisher.publishEvent(new ReviewReplyRegisteredEvent(
+                review.getId(),
+                review.getUser().getId(),
+                store.getId()
+        ));
     }
 
     @Transactional

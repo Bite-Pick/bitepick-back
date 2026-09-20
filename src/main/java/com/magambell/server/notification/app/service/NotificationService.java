@@ -1,11 +1,13 @@
 package com.magambell.server.notification.app.service;
 
 import com.google.firebase.messaging.FirebaseMessagingException;
+import com.google.firebase.messaging.MessagingErrorCode;
 import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.notification.adapter.in.web.CheckStoreOpenServiceRequest;
 import com.magambell.server.notification.app.port.in.NotificationUseCase;
 import com.magambell.server.notification.app.port.in.request.DeleteStoreOpenFcmTokenServiceRequest;
+import com.magambell.server.notification.app.port.in.request.NotifyReviewReplyRequest;
 import com.magambell.server.notification.app.port.in.request.NotifyStoreOpenRequest;
 import com.magambell.server.notification.app.port.in.request.SaveFcmTokenServiceRequest;
 import com.magambell.server.notification.app.port.in.request.SaveStoreOpenFcmTokenServiceRequest;
@@ -17,12 +19,16 @@ import com.magambell.server.notification.infra.FirebaseNotificationSender;
 import com.magambell.server.order.app.port.out.OrderQueryPort;
 import com.magambell.server.order.domain.entity.Order;
 import com.magambell.server.order.domain.entity.OrderGoods;
+import com.magambell.server.review.app.port.out.ReviewQueryPort;
+import com.magambell.server.review.app.port.out.response.OwnerReviewCountDTO;
 import com.magambell.server.store.app.port.out.StoreQueryPort;
 import com.magambell.server.store.domain.entity.Store;
 import com.magambell.server.user.app.port.out.UserQueryPort;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.enums.UserRole;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,6 +55,11 @@ public class NotificationService implements NotificationUseCase {
     private static final String STORE_APPROVED_TITLE = "🎉 바이트픽 가입 심사 완료!";
     private static final String STORE_APPROVED_BODY = "지금 바로 바이트백 판매를 시작해보세요 ✅";
     private static final String NEW_SIGNUP_REVIEW_BODY = "새 가입 매장을 검토해주세요!";
+    private static final String REVIEW_REPLY_TITLE = "💬답글이 달렸어요";
+    private static final String REVIEW_REPLY_BODY = "%s에서 회원님의 리뷰에 답글을 남겼어요. 확인해보세요!";
+    private static final String OWNER_REVIEW_SUMMARY_TITLE = "🔔새 리뷰가 도착했어요";
+    private static final String OWNER_REVIEW_SUMMARY_BODY = "리뷰 %d개가 사장님을 기다리고 있어요! 답글로 마음을 전해보세요🍞";
+    private static final ZoneId ASIA_SEOUL = ZoneId.of("Asia/Seoul");
 
     private final NotificationCommandPort notificationCommandPort;
     private final NotificationQueryPort notificationQueryPort;
@@ -56,6 +67,7 @@ public class NotificationService implements NotificationUseCase {
     private final StoreQueryPort storeQueryPort;
     private final UserQueryPort userQueryPort;
     private final OrderQueryPort orderQueryPort;
+    private final ReviewQueryPort reviewQueryPort;
 
     @Transactional
     @Override
@@ -125,7 +137,7 @@ public class NotificationService implements NotificationUseCase {
     public void notifyApproveOrder(final User user, final LocalDateTime pickupTime) {
         FcmTokenDTO token = notificationQueryPort.findWithAllByUserIdAndStoreIsNull(user);
         if (token != null) {
-            String message = "주문이 수락됐어요. [" + pickupTime.toLocalTime() + "]에 바이트백을 픽업 해주세요!";
+            String message = "주문이 수락됐어요. " + pickupTime.toLocalTime() + "에 바이트백을 픽업 해주세요!";
             send(message, token, Map.of(TYPE_KEY, ORDER_TYPE));
         }
     }
@@ -170,7 +182,7 @@ public class NotificationService implements NotificationUseCase {
         tokens.forEach(token -> {
             String nickname = token.nickName();
             String storeName = token.storeName();
-            String message = "[" + nickname + "]님이 기다리던 [" + storeName + "]의 바이트백 판매가 시작됐어요!";
+            String message = nickname + "님이 기다리던 " + storeName + "의 바이트백 판매가 시작됐어요!";
             log.info("오픈 알림 전송 - userId: {}, message: {}", token.userId(), message);
 
             send(message, token, Map.of(
@@ -214,7 +226,7 @@ public class NotificationService implements NotificationUseCase {
                         .distinct()
                         .collect(Collectors.joining(", ")); // 여러 매장이라면 쉼표로
 
-                String message = "[" + storeNames + "] 에서 바이트백을 픽업해주세요!";
+                String message = storeNames + "에서 바이트백을 픽업해주세요!";
                 send(message, customerToken, Map.of(TYPE_KEY, ORDER_TYPE));
             }
 
@@ -228,7 +240,7 @@ public class NotificationService implements NotificationUseCase {
                             .collect(Collectors.toSet());
 
                     storesOwnedByThisOwner.forEach(storeName -> {
-                        String message = "[" + storeName + "]의 픽업 가능 시간이 시작되었습니다.";
+                        String message = storeName + "의 픽업 가능 시간이 시작되었습니다.";
                         send(message, ownerToken, Map.of(TYPE_KEY, ORDER_TYPE));
                     });
                 }
@@ -267,6 +279,72 @@ public class NotificationService implements NotificationUseCase {
         send(STORE_APPROVED_TITLE, STORE_APPROVED_BODY, token);
     }
 
+    @Override
+    public void notifyReviewReply(final NotifyReviewReplyRequest request) {
+        User reviewAuthor = request.reviewAuthor();
+        FcmTokenDTO token = notificationQueryPort.findWithAllByUserIdAndStoreIsNull(reviewAuthor);
+        if (token == null) {
+            log.info("리뷰 답글 알림 대상 토큰 없음 - userId: {}, storeId: {}",
+                    reviewAuthor.getId(), request.store().getId());
+            return;
+        }
+
+        String message = REVIEW_REPLY_BODY.formatted(request.store().getName());
+        send(REVIEW_REPLY_TITLE, message, token);
+    }
+
+    @Override
+    public void notifyDailyOwnerReviewSummary() {
+        notifyDailyOwnerReviewSummary(LocalDate.now(ASIA_SEOUL));
+    }
+
+    void notifyDailyOwnerReviewSummary(final LocalDate today) {
+        LocalDateTime startAt = today.minusDays(1).atStartOfDay();
+        LocalDateTime endAt = today.atStartOfDay();
+        List<OwnerReviewCountDTO> reviewCounts = reviewQueryPort.getOwnerReviewCounts(startAt, endAt);
+
+        if (reviewCounts.isEmpty()) {
+            log.info("사장님 리뷰 묶음 알림 대상 없음 - startAt: {}, endAt: {}", startAt, endAt);
+            return;
+        }
+
+        Map<Long, Long> reviewCountByOwnerId = reviewCounts.stream()
+                .filter(reviewCount -> reviewCount.reviewCount() != null && reviewCount.reviewCount() > 0)
+                .collect(Collectors.toMap(
+                        OwnerReviewCountDTO::ownerId,
+                        OwnerReviewCountDTO::reviewCount,
+                        Long::sum
+                ));
+        if (reviewCountByOwnerId.isEmpty()) {
+            log.info("사장님 리뷰 묶음 알림 대상 없음 - startAt: {}, endAt: {}", startAt, endAt);
+            return;
+        }
+
+        List<Long> ownerIds = reviewCountByOwnerId.keySet().stream().toList();
+        Map<Long, FcmTokenDTO> tokenByOwnerId = notificationQueryPort
+                .findWithAllByOwnerIdsAndStoreIsNull(ownerIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        FcmTokenDTO::userId,
+                        Function.identity(),
+                        (first, second) -> first
+                ));
+
+        reviewCountByOwnerId.forEach((ownerId, reviewCount) -> {
+            FcmTokenDTO token = tokenByOwnerId.get(ownerId);
+            if (token == null) {
+                log.info("사장님 리뷰 묶음 알림 대상 토큰 없음 - ownerId: {}, reviewCount: {}",
+                        ownerId, reviewCount);
+                return;
+            }
+
+            String message = OWNER_REVIEW_SUMMARY_BODY.formatted(reviewCount);
+            log.info("사장님 리뷰 묶음 알림 전송 - ownerId: {}, reviewCount: {}",
+                    ownerId, reviewCount);
+            send(OWNER_REVIEW_SUMMARY_TITLE, message, token);
+        });
+    }
+
     private void send(final String message, final FcmTokenDTO token) {
         send(UNIFIED_NOTIFICATION_TITLE, message, token, Map.of());
     }
@@ -289,7 +367,14 @@ public class NotificationService implements NotificationUseCase {
     }
 
     private void fcmFail(final FirebaseMessagingException e, final FcmTokenDTO token) {
-        log.warn("FCM 알림 전송 실패. tokenId={}, reason={}", token.fcmTokenId(), e.getMessage());
+        MessagingErrorCode errorCode = e.getMessagingErrorCode();
+        log.warn("FCM 알림 전송 실패. tokenId={}, errorCode={}, reason={}",
+                token.fcmTokenId(), errorCode, e.getMessage());
+
+        if (errorCode != MessagingErrorCode.UNREGISTERED) {
+            return;
+        }
+
         try {
             notificationCommandPort.removeToken(token.fcmTokenId());
         } catch (org.springframework.orm.ObjectOptimisticLockingFailureException | org.hibernate.StaleObjectStateException ex) {

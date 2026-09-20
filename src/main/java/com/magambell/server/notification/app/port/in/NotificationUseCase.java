@@ -2,6 +2,7 @@ package com.magambell.server.notification.app.port.in;
 
 import com.magambell.server.notification.adapter.in.web.CheckStoreOpenServiceRequest;
 import com.magambell.server.notification.app.port.in.request.DeleteStoreOpenFcmTokenServiceRequest;
+import com.magambell.server.notification.app.port.in.request.NotifyReviewReplyRequest;
 import com.magambell.server.notification.app.port.in.request.NotifyStoreOpenRequest;
 import com.magambell.server.notification.app.port.in.request.SaveFcmTokenServiceRequest;
 import com.magambell.server.notification.app.port.in.request.SaveStoreOpenFcmTokenServiceRequest;
@@ -36,4 +37,8 @@ public interface NotificationUseCase {
     void notifyNewSignupStoreReview(UserRole userRole);
 
     void notifyStoreApproved(User user);
+
+    void notifyReviewReply(NotifyReviewReplyRequest request);
+
+    void notifyDailyOwnerReviewSummary();
 }

@@ -3,6 +3,11 @@ package com.magambell.server.review.app.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.magambell.server.auth.domain.ProviderType;
 import com.magambell.server.common.enums.ErrorCode;
@@ -13,6 +18,8 @@ import com.magambell.server.goods.adapter.in.web.GoodsImagesRegister;
 import com.magambell.server.goods.app.port.in.dto.RegisterGoodsDTO;
 import com.magambell.server.goods.domain.entity.Goods;
 import com.magambell.server.goods.domain.repository.GoodsRepository;
+import com.magambell.server.notification.app.port.in.NotificationUseCase;
+import com.magambell.server.notification.app.port.in.request.NotifyReviewReplyRequest;
 import com.magambell.server.order.app.port.in.dto.CreateOrderDTO;
 import com.magambell.server.order.domain.entity.Order;
 import com.magambell.server.order.domain.entity.OrderGoods;
@@ -31,6 +38,8 @@ import com.magambell.server.review.app.port.in.request.ReportReviewServiceReques
 import com.magambell.server.review.app.port.in.request.ReviewReportListServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewStoreServiceRequest;
 import com.magambell.server.review.app.port.out.ReviewCommandPort;
+import com.magambell.server.review.app.port.out.ReviewQueryPort;
+import com.magambell.server.review.app.port.out.response.OwnerReviewCountDTO;
 import com.magambell.server.review.app.port.out.response.ReviewListDTO;
 import com.magambell.server.review.app.port.out.response.ReviewRatingSummaryDTO;
 import com.magambell.server.review.app.port.out.response.ReviewReportListDTO;
@@ -59,6 +68,7 @@ import com.magambell.server.user.domain.enums.UserRole;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.repository.UserRepository;
 import com.magambell.server.user.domain.repository.UserSocialAccountRepository;
+import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -68,7 +78,11 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.transaction.TestTransaction;
+import org.springframework.transaction.annotation.Transactional;
 
 @ActiveProfiles("test")
 @SpringBootTest
@@ -101,11 +115,17 @@ class ReviewServiceTest {
     @Autowired
     private ReviewCommandPort reviewCommandPort;
     @Autowired
+    private ReviewQueryPort reviewQueryPort;
+    @Autowired
     private OrderRepository orderRepository;
     @Autowired
     private OrderGoodsRepository orderGoodsRepository;
     @Autowired
     private PaymentRepository paymentRepository;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+    @MockBean
+    private NotificationUseCase notificationUseCase;
     private User user;
     private User owner;
     private Goods goods;
@@ -330,6 +350,7 @@ class ReviewServiceTest {
     }
 
     @DisplayName("사장님이 본인 매장 리뷰에 답글을 작성한다.")
+    @Transactional
     @Test
     void registerReviewReply() {
         // given
@@ -348,6 +369,64 @@ class ReviewServiceTest {
         assertThat(reply.getReview().getId()).isEqualTo(review.getId());
         assertThat(reply.getContent()).isEqualTo("방문해 주셔서 감사합니다.");
         assertThat(reply.getReplyStatus()).isEqualTo(ReviewReplyStatus.ACTIVE);
+        verifyNoInteractions(notificationUseCase);
+
+        TestTransaction.flagForCommit();
+        TestTransaction.end();
+
+        verify(notificationUseCase).notifyReviewReply(argThat(notificationRequest ->
+                notificationRequest.reviewAuthor().getId().equals(user.getId())
+                        && notificationRequest.store().getId().equals(goods.getStore().getId())
+        ));
+    }
+
+    @DisplayName("답글 트랜잭션이 롤백되면 고객 알림을 호출하지 않는다.")
+    @Transactional
+    @Test
+    void registerReviewReplyDoesNotNotifyCustomerAfterRollback() {
+        // given
+        Review review = saveReview();
+        RegisterReviewReplyServiceRequest request = new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "방문해 주셔서 감사합니다."
+        );
+
+        // when
+        reviewService.registerReviewReply(request);
+        verifyNoInteractions(notificationUseCase);
+
+        TestTransaction.flagForRollback();
+        TestTransaction.end();
+
+        // then
+        verifyNoInteractions(notificationUseCase);
+    }
+
+    @DisplayName("삭제된 답글을 재등록하면 고객 알림을 다시 호출한다.")
+    @Test
+    void registerReviewReply_notifiesCustomerWhenReplyRestored() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "첫 번째 답글"
+        ));
+        reviewService.deleteReviewReply(new DeleteReviewReplyServiceRequest(review.getId(), owner.getId()));
+
+        // when
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "다시 작성한 답글"
+        ));
+
+        // then
+        ReviewReply reply = reviewReplyRepository.findAll().get(0);
+        assertThat(reply.getReplyStatus()).isEqualTo(ReviewReplyStatus.ACTIVE);
+        assertThat(reply.getContent()).isEqualTo("다시 작성한 답글");
+        verify(notificationUseCase, times(2)).notifyReviewReply(any(NotifyReviewReplyRequest.class));
     }
 
     @DisplayName("이미 ACTIVE 답글이 있으면 중복 답글 작성에 실패한다.")
@@ -740,6 +819,63 @@ class ReviewServiceTest {
         assertThat(reportList.get(0).userRole()).isEqualTo(UserRole.CUSTOMER);
     }
 
+    @DisplayName("Review.createdAt 범위의 ACTIVE 리뷰를 사장님별로 집계한다.")
+    @Test
+    void getOwnerReviewCounts() {
+        // given
+        LocalDateTime startAt = LocalDateTime.of(2026, 9, 16, 0, 0);
+        LocalDateTime endAt = LocalDateTime.of(2026, 9, 17, 0, 0);
+
+        Review atStart = saveReviewWithOrderGoods(createCompletedOrderGoods(), 3, "시작 경계 리뷰");
+        updateReviewCreatedAt(atStart, startAt);
+
+        Review beforeEnd = saveReviewWithOrderGoods(createCompletedOrderGoods(), 2, "종료 직전 리뷰");
+        updateReviewCreatedAt(beforeEnd, endAt.minusSeconds(1));
+
+        Review atEnd = saveReviewWithOrderGoods(createCompletedOrderGoods(), 1, "종료 경계 리뷰");
+        updateReviewCreatedAt(atEnd, endAt);
+
+        Review beforeStart = saveReviewWithOrderGoods(createCompletedOrderGoods(), 1, "이전 날짜 리뷰");
+        updateReviewCreatedAt(beforeStart, startAt.minusSeconds(1));
+
+        Review deleted = saveReviewWithOrderGoods(createCompletedOrderGoods(), 1, "삭제된 리뷰");
+        deleted.delete();
+        reviewRepository.saveAndFlush(deleted);
+        updateReviewCreatedAt(deleted, startAt.plusHours(1));
+
+        Goods otherOwnerGoods = createAndSaveOwnerGoods("summary");
+        Review otherOwnerReview = saveReviewWithOrderGoods(
+                createCompletedOrderGoods(otherOwnerGoods), 3, "다른 사장님 리뷰");
+        updateReviewCreatedAt(otherOwnerReview, startAt.plusHours(2));
+
+        // when
+        List<OwnerReviewCountDTO> result = reviewQueryPort.getOwnerReviewCounts(startAt, endAt);
+
+        // then
+        assertThat(result).containsExactlyInAnyOrder(
+                new OwnerReviewCountDTO(owner.getId(), goods.getStore().getId(), 2L),
+                new OwnerReviewCountDTO(
+                        otherOwnerGoods.getStore().getUser().getId(),
+                        otherOwnerGoods.getStore().getId(),
+                        1L
+                )
+        );
+    }
+
+    @DisplayName("조회 범위에 리뷰가 없으면 사장님별 리뷰 집계 결과가 비어 있다.")
+    @Test
+    void getOwnerReviewCountsReturnsEmptyWhenNoReviewsExist() {
+        // given
+        LocalDateTime startAt = LocalDateTime.of(2040, 1, 1, 0, 0);
+        LocalDateTime endAt = startAt.plusDays(1);
+
+        // when
+        List<OwnerReviewCountDTO> result = reviewQueryPort.getOwnerReviewCounts(startAt, endAt);
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
     private Review createReview(int i) {
         CreateOrderDTO createOrderDTO = new CreateOrderDTO(user, goods, 1, 9000, LocalDateTime.now(), "test");
         Order createOrder = createOrderDTO.toOrder();
@@ -802,11 +938,73 @@ class ReviewServiceTest {
     }
 
     private OrderGoods createCompletedOrderGoods() {
-        CreateOrderDTO createOrderDTO = new CreateOrderDTO(user, goods, 1, 9000, LocalDateTime.now(), "test");
+        return createCompletedOrderGoods(goods);
+    }
+
+    private OrderGoods createCompletedOrderGoods(final Goods targetGoods) {
+        CreateOrderDTO createOrderDTO = new CreateOrderDTO(
+                user, targetGoods, 1, targetGoods.getSalePrice(), LocalDateTime.now(), "test");
         Order createOrder = createOrderDTO.toOrder();
         createOrder.completed();
         Order savedOrder = orderRepository.save(createOrder);
         return savedOrder.getOrderGoodsList().get(0);
+    }
+
+    private Goods createAndSaveOwnerGoods(final String suffix) {
+        UserSocialAccountDTO ownerAccountDTO = new UserSocialAccountDTO(
+                "owner-" + suffix + "@test.com",
+                "집계 사장님",
+                "집계 사장님 닉네임",
+                "01033334444",
+                ProviderType.KAKAO,
+                "owner-social-" + suffix,
+                UserRole.OWNER
+        );
+        User targetOwner = ownerAccountDTO.toUser();
+        targetOwner.addUserSocialAccount(ownerAccountDTO.toUserSocialAccount());
+
+        RegisterStoreDTO storeDTO = new RegisterStoreDTO(
+                "집계 매장 " + suffix,
+                "서울시",
+                1.0,
+                2.0,
+                "대표",
+                "01033334444",
+                "business-" + suffix,
+                Bank.KB국민,
+                "1234567890",
+                List.of(),
+                Approved.APPROVED,
+                targetOwner,
+                null,
+                "주차장"
+        );
+        Store targetStore = storeDTO.toEntity();
+
+        RegisterGoodsDTO goodsDTO = new RegisterGoodsDTO(
+                "집계 상품 " + suffix,
+                LocalDateTime.now().minusHours(1),
+                LocalDateTime.now().plusHours(2),
+                10,
+                10000,
+                10,
+                9000,
+                targetStore,
+                List.of()
+        );
+        Goods targetGoods = Goods.create(goodsDTO);
+        targetStore.addGoods(targetGoods);
+        targetOwner.addStore(targetStore);
+        userRepository.save(targetOwner);
+        return targetGoods;
+    }
+
+    private void updateReviewCreatedAt(final Review review, final LocalDateTime createdAt) {
+        jdbcTemplate.update(
+                "UPDATE review SET created_at = ? WHERE review_id = ?",
+                Timestamp.valueOf(createdAt),
+                review.getId()
+        );
     }
 
     private Review saveReviewWithOrderGoods(final OrderGoods targetOrderGoods, final int rating,
