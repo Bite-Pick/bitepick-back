@@ -5,6 +5,7 @@ import static com.magambell.server.user.domain.enums.VerificationStatus.REGISTER
 import com.magambell.server.auth.app.service.JwtService;
 import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.DuplicateException;
+import com.magambell.server.common.exception.InvalidRequestException;
 import com.magambell.server.common.exception.NotEqualException;
 import com.magambell.server.common.exception.NotFoundException;
 import com.magambell.server.common.security.CustomUserDetails;
@@ -21,6 +22,7 @@ import com.magambell.server.user.app.port.out.UserEmailQueryPort;
 import com.magambell.server.user.app.port.out.UserQueryPort;
 import com.magambell.server.user.app.port.out.dto.MyPageStatsDTO;
 import com.magambell.server.user.app.port.out.dto.UserInfoDTO;
+import com.magambell.server.user.domain.enums.SignupSource;
 import com.magambell.server.user.domain.enums.UserRole;
 import com.magambell.server.user.domain.entity.User;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +41,7 @@ public class UserService implements UserUseCase {
 
     @Transactional
     public void register(RegisterServiceRequest request) {
+        validateSignupSource(request.signupSource(), request.signupSourceDetail());
         validateEmailAndAuthCode(request.email(), request.authCode());
         duplicatedEmail(request.email());
 
@@ -85,6 +88,21 @@ public class UserService implements UserUseCase {
     private void duplicatedEmail(final String email) {
         if (userQueryPort.existsByEmail(email)) {
             throw new DuplicateException(ErrorCode.DUPLICATE_EMAIL);
+        }
+    }
+
+    private void validateSignupSource(final SignupSource signupSource, final String signupSourceDetail) {
+        if (signupSource == null) {
+            throw new InvalidRequestException(ErrorCode.INVALID_SIGNUP_SOURCE);
+        }
+
+        if (signupSource == SignupSource.OTHER) {
+            if (signupSourceDetail == null || signupSourceDetail.isBlank()
+                    || signupSourceDetail.length() > 100) {
+                throw new InvalidRequestException(ErrorCode.INVALID_SIGNUP_SOURCE_DETAIL);
+            }
+        } else if (signupSourceDetail != null && !signupSourceDetail.isBlank()) {
+            throw new InvalidRequestException(ErrorCode.INVALID_SIGNUP_SOURCE_DETAIL);
         }
     }
 

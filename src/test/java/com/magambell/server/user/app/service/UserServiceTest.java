@@ -32,6 +32,7 @@ import com.magambell.server.user.app.port.in.dto.UserSocialAccountDTO;
 import com.magambell.server.user.app.port.in.request.RegisterServiceRequest;
 import com.magambell.server.user.app.port.out.dto.MyPageStatsDTO;
 import com.magambell.server.user.domain.enums.UserRole;
+import com.magambell.server.user.domain.enums.SignupSource;
 import com.magambell.server.user.domain.enums.VerificationStatus;
 import com.magambell.server.user.domain.entity.User;
 import com.magambell.server.user.domain.repository.UserEmailRepository;
@@ -42,6 +43,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -102,7 +104,7 @@ class UserServiceTest {
         userEmailRepository.save(userEmailDTO.toUserEmail());
 
         RegisterServiceRequest request = new RegisterServiceRequest(email, "Qwer1234!!", "test", "01012341234",
-                UserRole.CUSTOMER, authCode);
+                UserRole.CUSTOMER, authCode, SignupSource.SEARCH, null);
 
         // when
         userService.register(request);
@@ -116,6 +118,98 @@ class UserServiceTest {
                         "test",
                         "01012341234"
                 );
+        assertThat(user.getSignupSource()).isEqualTo(SignupSource.SEARCH);
+        assertThat(user.getSignupSourceDetail()).isNull();
+    }
+
+    @DisplayName("회원가입 시 OTHER가 아닌 가입 경로를 저장한다.")
+    @ParameterizedTest
+    @EnumSource(value = SignupSource.class, names = {"INSTAGRAM", "THREAD", "REFERRAL", "SEARCH"})
+    void registerWithSignupSource(final SignupSource signupSource) {
+        String email = "test@test.com";
+        String authCode = "testCode";
+        userEmailRepository.save(new UserEmailDTO(email, authCode, VerificationStatus.REGISTER).toUserEmail());
+
+        userService.register(new RegisterServiceRequest(email, "Qwer1234!!", "test", "01012341234",
+                UserRole.CUSTOMER, authCode, signupSource, null));
+
+        User user = userRepository.findAll().get(0);
+        assertThat(user.getSignupSource()).isEqualTo(signupSource);
+        assertThat(user.getSignupSourceDetail()).isNull();
+    }
+
+    @DisplayName("회원가입 시 OTHER와 상세 입력값을 저장하고 앞뒤 공백을 제거한다.")
+    @Test
+    void registerWithOtherSignupSourceDetail() {
+        String email = "test@test.com";
+        String authCode = "testCode";
+        userEmailRepository.save(new UserEmailDTO(email, authCode, VerificationStatus.REGISTER).toUserEmail());
+
+        userService.register(new RegisterServiceRequest(email, "Qwer1234!!", "test", "01012341234",
+                UserRole.CUSTOMER, authCode, SignupSource.OTHER, "  친구 소개  "));
+
+        User user = userRepository.findAll().get(0);
+        assertThat(user.getSignupSource()).isEqualTo(SignupSource.OTHER);
+        assertThat(user.getSignupSourceDetail()).isEqualTo("친구 소개");
+    }
+
+    @DisplayName("회원가입 시 가입 경로가 없으면 예외가 발생한다.")
+    @Test
+    void registerWithoutSignupSource() {
+        RegisterServiceRequest request = new RegisterServiceRequest("test@test.com", "Qwer1234!!", "test",
+                "01012341234", UserRole.CUSTOMER, "testCode", null, null);
+
+        assertThatThrownBy(() -> userService.register(request))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_SIGNUP_SOURCE.getMessage());
+    }
+
+    @DisplayName("OTHER 선택 후 상세 입력이 없으면 예외가 발생한다.")
+    @Test
+    void registerOtherWithoutSignupSourceDetail() {
+        RegisterServiceRequest request = new RegisterServiceRequest("test@test.com", "Qwer1234!!", "test",
+                "01012341234", UserRole.CUSTOMER, "testCode", SignupSource.OTHER, null);
+
+        assertThatThrownBy(() -> userService.register(request))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_SIGNUP_SOURCE_DETAIL.getMessage());
+    }
+
+    @DisplayName("OTHER 선택 후 상세 입력이 공백뿐이면 예외가 발생한다.")
+    @Test
+    void registerOtherWithBlankSignupSourceDetail() {
+        RegisterServiceRequest request = new RegisterServiceRequest("test@test.com", "Qwer1234!!", "test",
+                "01012341234", UserRole.CUSTOMER, "testCode", SignupSource.OTHER, "   ");
+
+        assertThatThrownBy(() -> userService.register(request))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_SIGNUP_SOURCE_DETAIL.getMessage());
+    }
+
+    @DisplayName("OTHER가 아닌 가입 경로에 상세 입력값이 오면 예외가 발생한다.")
+    @Test
+    void registerNonOtherWithSignupSourceDetail() {
+        RegisterServiceRequest request = new RegisterServiceRequest("test@test.com", "Qwer1234!!", "test",
+                "01012341234", UserRole.CUSTOMER, "testCode", SignupSource.SEARCH, "네이버 검색");
+
+        assertThatThrownBy(() -> userService.register(request))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_SIGNUP_SOURCE_DETAIL.getMessage());
+    }
+
+    @DisplayName("기존 회원의 가입 경로와 상세 값이 NULL이어도 조회할 수 있다.")
+    @Test
+    void findLegacyUserWithNullSignupSource() {
+        UserSocialAccountDTO legacyUserDTO = new UserSocialAccountDTO("legacy@test.com", "기존 회원", "기존닉네임",
+                "01012341234", ProviderType.KAKAO, "legacy-provider-id", UserRole.CUSTOMER);
+        User legacyUser = legacyUserDTO.toUser();
+        legacyUser.addUserSocialAccount(legacyUserDTO.toUserSocialAccount());
+        User savedUser = userRepository.save(legacyUser);
+
+        User foundUser = userRepository.findById(savedUser.getId()).orElseThrow();
+
+        assertThat(foundUser.getSignupSource()).isNull();
+        assertThat(foundUser.getSignupSourceDetail()).isNull();
     }
 
     @DisplayName("회원가입시 인증번호가 다르면 예외가 발생한다.")
@@ -128,7 +222,7 @@ class UserServiceTest {
         userEmailRepository.save(userEmailDTO.toUserEmail());
 
         RegisterServiceRequest request = new RegisterServiceRequest(email, "Qwer1234!!", "test", "01012341234",
-                UserRole.CUSTOMER, authCode);
+                UserRole.CUSTOMER, authCode, SignupSource.SEARCH, null);
 
         // when // then
         assertThatThrownBy(() -> userService.register(request))
@@ -143,7 +237,7 @@ class UserServiceTest {
         String authCode = "testCode";
         String email = "test@test.com";
         RegisterServiceRequest request = new RegisterServiceRequest(email, "Qwer1234!!", "test", "01012341234",
-                UserRole.CUSTOMER, authCode);
+                UserRole.CUSTOMER, authCode, SignupSource.SEARCH, null);
 
         // when // then
         assertThatThrownBy(() -> userService.register(request))
@@ -169,7 +263,7 @@ class UserServiceTest {
         userEmailRepository.save(userEmailDTO.toUserEmail());
 
         RegisterServiceRequest request = new RegisterServiceRequest(email, password, "test", "01012341234",
-                UserRole.CUSTOMER, authCode);
+                UserRole.CUSTOMER, authCode, SignupSource.SEARCH, null);
 
         // when // then
         assertThatThrownBy(() -> userService.register(request))
