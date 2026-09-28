@@ -4,6 +4,7 @@ import com.magambell.server.common.BaseTimeEntity;
 import com.magambell.server.common.enums.ErrorCode;
 import com.magambell.server.common.exception.DuplicateException;
 import com.magambell.server.common.exception.InvalidRequestException;
+import com.magambell.server.common.exception.NotFoundException;
 import com.magambell.server.order.domain.entity.OrderGoods;
 import com.magambell.server.review.app.port.in.dto.RegisterReviewDTO;
 import com.magambell.server.review.domain.enums.ReviewStatus;
@@ -107,6 +108,14 @@ public class Review extends BaseTimeEntity {
         if (this.reviewReply != null) {
             this.reviewReply.delete();
         }
+    }
+
+    public void editReviewReply(final String content) {
+        if (this.reviewReply == null || !this.reviewReply.isActive()) {
+            throw new NotFoundException(ErrorCode.REVIEW_REPLY_NOT_FOUND);
+        }
+
+        this.reviewReply.edit(content);
     }
 
     public void delete() {

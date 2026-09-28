@@ -24,6 +24,8 @@ public interface ReviewUseCase {
 
     void registerReviewReply(RegisterReviewReplyServiceRequest request);
 
+    void editReviewReply(EditReviewReplyServiceRequest request);
+
     void deleteReviewReply(DeleteReviewReplyServiceRequest request);
 
     void reportReview(ReportReviewServiceRequest request);

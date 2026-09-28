@@ -84,6 +84,7 @@ public enum ErrorCode {
     FAVORITE_NOT_FOUND("즐겨찾기한 매장을 찾을 수 없습니다."),
     FCM_NOT_FOUND("알림 설정한 매장을 찾을 수 없습니다."),
     REVIEW_NOT_FOUND("리뷰를 찾을 수 없습니다."),
+    REVIEW_REPLY_NOT_FOUND("리뷰 답글을 찾을 수 없습니다."),
     BANNER_NOT_FOUND("배너가 존재하지 않았습니다."),
     NOT_FOUND_REGION("지역 정보를 찾을 수 없습니다."),
 

@@ -71,6 +71,10 @@ public class ReviewReply extends BaseTimeEntity {
         this.replyStatus = ReviewReplyStatus.ACTIVE;
     }
 
+    public void edit(final String content) {
+        this.content = content;
+    }
+
     public void delete() {
         this.replyStatus = ReviewReplyStatus.DELETED;
     }
