@@ -138,6 +138,21 @@ public class ReviewController {
     }
 
     @PreAuthorize("hasRole('OWNER')")
+    @Operation(summary = "리뷰 답글 수정")
+    @ApiResponse(responseCode = "200", content = {
+            @Content(schema = @Schema(implementation = BaseResponse.class))})
+    @PatchMapping("/{reviewId}/reply")
+    public Response<BaseResponse> editReviewReply(
+            @PathVariable Long reviewId,
+            @RequestBody @Validated final EditReviewReplyRequest request,
+            @AuthenticationPrincipal final CustomUserDetails customUserDetails
+    ) {
+        reviewUseCase.editReviewReply(request.toServiceRequest(reviewId, customUserDetails.userId()));
+
+        return new Response<>();
+    }
+
+    @PreAuthorize("hasRole('OWNER')")
     @Operation(summary = "리뷰 답글 삭제")
     @ApiResponse(responseCode = "200", content = {
             @Content(schema = @Schema(implementation = BaseResponse.class))})
