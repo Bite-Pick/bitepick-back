@@ -134,6 +134,18 @@ public class ReviewService implements ReviewUseCase {
 
     @Transactional
     @Override
+    public void editReviewReply(final EditReviewReplyServiceRequest request) {
+        validateReplyContent(request.content());
+
+        User user = userQueryPort.findById(request.userId());
+        Review review = reviewQueryPort.findById(request.reviewId());
+
+        validateReviewOwner(user, review);
+        review.editReviewReply(request.content().trim());
+    }
+
+    @Transactional
+    @Override
     public void deleteReviewReply(final DeleteReviewReplyServiceRequest request) {
         User user = userQueryPort.findById(request.userId());
         Review review = reviewQueryPort.findById(request.reviewId());

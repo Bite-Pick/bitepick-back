@@ -29,6 +29,7 @@ import com.magambell.server.payment.domain.repository.PaymentRepository;
 import com.magambell.server.review.app.port.in.dto.RegisterReviewDTO;
 import com.magambell.server.review.app.port.in.request.DeleteReviewReplyServiceRequest;
 import com.magambell.server.review.app.port.in.request.DeleteReviewServiceRequest;
+import com.magambell.server.review.app.port.in.request.EditReviewReplyServiceRequest;
 import com.magambell.server.review.app.port.in.request.RegisterReviewReplyServiceRequest;
 import com.magambell.server.review.app.port.in.request.RegisterReviewServiceRequest;
 import com.magambell.server.review.app.port.in.request.ReviewListServiceRequest;
@@ -511,6 +512,241 @@ class ReviewServiceTest {
                 otherOwner.getId(),
                 "타 매장 답글"
         ))).isInstanceOf(InvalidRequestException.class);
+    }
+
+    @DisplayName("사장님이 본인 매장 리뷰의 활성 답글을 수정한다.")
+    @Test
+    void editReviewReply() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정 전 답글"
+        ));
+        ReviewReply savedReply = reviewReplyRepository.findAll().get(0);
+        Long replyId = savedReply.getId();
+
+        // when
+        reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "  수정된 답글  "
+        ));
+
+        // then
+        List<ReviewReply> replies = reviewReplyRepository.findAll();
+        assertThat(replies).hasSize(1);
+        assertThat(replies.get(0).getId()).isEqualTo(replyId);
+        assertThat(replies.get(0).getContent()).isEqualTo("수정된 답글");
+        assertThat(replies.get(0).getReplyStatus()).isEqualTo(ReviewReplyStatus.ACTIVE);
+    }
+
+    @DisplayName("동일한 내용으로 답글을 수정해도 정상 처리한다.")
+    @Test
+    void editReviewReplyWithSameContent() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "동일한 답글"
+        ));
+
+        // when
+        reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "동일한 답글"
+        ));
+
+        // then
+        assertThat(reviewReplyRepository.findAll()).singleElement()
+                .extracting(ReviewReply::getContent)
+                .isEqualTo("동일한 답글");
+    }
+
+    @DisplayName("답글이 없는 리뷰의 답글 수정에 실패한다.")
+    @Test
+    void editReviewReplyThrowsWhenReplyDoesNotExist() {
+        // given
+        Review review = saveReview();
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정할 답글"
+        )))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage(ErrorCode.REVIEW_REPLY_NOT_FOUND.getMessage());
+    }
+
+    @DisplayName("삭제된 답글 수정에 실패한다.")
+    @Test
+    void editReviewReplyThrowsWhenReplyIsDeleted() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "삭제할 답글"
+        ));
+        reviewService.deleteReviewReply(new DeleteReviewReplyServiceRequest(review.getId(), owner.getId()));
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정할 답글"
+        )))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage(ErrorCode.REVIEW_REPLY_NOT_FOUND.getMessage());
+    }
+
+    @DisplayName("타 매장 사장님은 답글 수정에 실패한다.")
+    @Test
+    void editReviewReplyThrowsWhenNotStoreOwner() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정 전 답글"
+        ));
+        User otherOwner = saveOwner("edit-other-owner@test.com", "edit-other-owner-social-id");
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                otherOwner.getId(),
+                "권한 없는 수정"
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_STORE_OWNER.getMessage());
+    }
+
+    @DisplayName("고객은 답글 수정에 실패한다.")
+    @Test
+    void editReviewReplyThrowsWhenRequesterIsCustomer() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정 전 답글"
+        ));
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                user.getId(),
+                "고객의 수정 요청"
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_STORE_OWNER.getMessage());
+    }
+
+    @DisplayName("존재하지 않는 리뷰의 답글 수정에 실패한다.")
+    @Test
+    void editReviewReplyThrowsWhenReviewDoesNotExist() {
+        // when & then
+        assertThatThrownBy(() -> reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                Long.MAX_VALUE,
+                owner.getId(),
+                "수정할 답글"
+        )))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage(ErrorCode.REVIEW_NOT_FOUND.getMessage());
+    }
+
+    @DisplayName("삭제된 리뷰의 답글 수정에 실패한다.")
+    @Test
+    void editReviewReplyThrowsWhenReviewIsDeleted() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정 전 답글"
+        ));
+        reviewService.deleteReview(new DeleteReviewServiceRequest(review.getId(), user.getId()));
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정할 답글"
+        )))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage(ErrorCode.REVIEW_NOT_FOUND.getMessage());
+    }
+
+    @DisplayName("답글 수정 내용이 blank이면 실패한다.")
+    @Test
+    void editReviewReplyThrowsWhenContentBlank() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정 전 답글"
+        ));
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "   "
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_REVIEW_REPLY_CONTENT.getMessage());
+    }
+
+    @DisplayName("답글 수정 내용이 500자를 초과하면 실패한다.")
+    @Test
+    void editReviewReplyThrowsWhenContentTooLong() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정 전 답글"
+        ));
+
+        // when & then
+        assertThatThrownBy(() -> reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "a".repeat(501)
+        )))
+                .isInstanceOf(InvalidRequestException.class)
+                .hasMessage(ErrorCode.INVALID_REVIEW_REPLY_CONTENT.getMessage());
+    }
+
+    @DisplayName("답글 수정 내용은 500자까지 허용한다.")
+    @Test
+    void editReviewReplyAllowsContentWithMaxLength() {
+        // given
+        Review review = saveReview();
+        reviewService.registerReviewReply(new RegisterReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                "수정 전 답글"
+        ));
+        String content = "a".repeat(500);
+
+        // when
+        reviewService.editReviewReply(new EditReviewReplyServiceRequest(
+                review.getId(),
+                owner.getId(),
+                content
+        ));
+
+        // then
+        assertThat(reviewReplyRepository.findAll()).singleElement()
+                .extracting(ReviewReply::getContent)
+                .isEqualTo(content);
     }
 
     @DisplayName("사장님이 본인 매장 리뷰 답글을 삭제한다.")
