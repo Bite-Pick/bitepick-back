@@ -212,6 +212,77 @@ class StoreServiceTest {
         )).containsExactlyInAnyOrder(nearbyStore.getId(), distantStore.getId());
     }
 
+    @DisplayName("기본 정렬은 판매 상태가 ON인 매장을 우선한다.")
+    @Test
+    void getStoreList_defaultSortPrioritizesSaleStatusOn() {
+        // given
+        Store openDistantStore = createStore(1, 35.1796, 129.0756, true);
+        Store closedNearbyStore = createStore(2, 37.5666, 126.9781, false);
+        storeRepository.saveAll(List.of(openDistantStore, closedNearbyStore));
+
+        SearchStoreListServiceRequest request = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 1, 30
+        );
+
+        // when
+        StoreListResponse result = storeService.getStoreList(request);
+
+        // then
+        assertThat(result.storeListDTOResponses())
+                .extracting(StoreListDTOResponse::storeId)
+                .containsExactly(openDistantStore.getId(), closedNearbyStore.getId());
+    }
+
+    @DisplayName("기본 정렬은 판매 상태가 같으면 요청 좌표에서 가까운 매장을 우선한다.")
+    @Test
+    void getStoreList_defaultSortOrdersSameSaleStatusByDistance() {
+        // given
+        Store distantStore = createStore(1, 35.1796, 129.0756);
+        Store nearbyStore = createStore(2, 37.5666, 126.9781);
+        storeRepository.saveAll(List.of(distantStore, nearbyStore));
+
+        SearchStoreListServiceRequest request = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 1, 30
+        );
+
+        // when
+        StoreListResponse result = storeService.getStoreList(request);
+
+        // then
+        assertThat(result.storeListDTOResponses())
+                .extracting(StoreListDTOResponse::storeId)
+                .containsExactly(nearbyStore.getId(), distantStore.getId());
+    }
+
+    @DisplayName("정렬값이 없는 경우와 RECENT_DESC는 동일한 기본 정렬을 사용한다.")
+    @Test
+    void getStoreList_nullAndRecentDescUseSameDefaultSort() {
+        // given
+        Store distantStore = createStore(1, 35.1796, 129.0756);
+        Store nearbyStore = createStore(2, 37.5666, 126.9781);
+        storeRepository.saveAll(List.of(distantStore, nearbyStore));
+
+        SearchStoreListServiceRequest defaultRequest = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", null, false, 1, 30
+        );
+        SearchStoreListServiceRequest recentDescRequest = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 1, 30
+        );
+
+        // when
+        StoreListResponse defaultResult = storeService.getStoreList(defaultRequest);
+        StoreListResponse recentDescResult = storeService.getStoreList(recentDescRequest);
+
+        // then
+        assertThat(defaultResult.storeListDTOResponses())
+                .extracting(StoreListDTOResponse::storeId)
+                .containsExactlyElementsOf(
+                        recentDescResult.storeListDTOResponses().stream()
+                                .map(StoreListDTOResponse::storeId)
+                                .toList()
+                );
+    }
+
     @DisplayName("매장 상세 정보를 조회한다")
     @Test
     void getStoreDetail() {
@@ -435,6 +506,10 @@ class StoreServiceTest {
     }
 
     private Store createStore(int i, double latitude, double longitude) {
+        return createStore(i, latitude, longitude, true);
+    }
+
+    private Store createStore(int i, double latitude, double longitude, boolean saleOn) {
         UserSocialAccountDTO userSocialAccountDTO = new UserSocialAccountDTO("test" + i + "@test.com", "테스트이름", "닉네임",
                 "01012341234",
                 ProviderType.KAKAO,
@@ -477,7 +552,9 @@ class StoreServiceTest {
         goods.addStock(stock);
 
         userRepository.save(user);
-        goods.changeStatus(user, ON, LocalDateTime.of(2025, 1, 1, 8, 0));
+        if (saleOn) {
+            goods.changeStatus(user, ON, LocalDateTime.of(2025, 1, 1, 8, 0));
+        }
         return store;
     }
 
