@@ -62,7 +62,6 @@ import static com.querydsl.core.types.ExpressionUtils.count;
 @RequiredArgsConstructor
 public class StoreRepositoryImpl implements StoreRepositoryCustom {
 
-    private static final Integer LIMIT_KM = 6;
     private static final Double CLOSE_LIMIT_KM = 3.0;
     private final JPAQueryFactory queryFactory;
 
@@ -84,7 +83,6 @@ public class StoreRepositoryImpl implements StoreRepositoryCustom {
         }
 
         BooleanBuilder conditions = new BooleanBuilder();
-        Optional.ofNullable(radiusCondition(distance)).ifPresent(conditions::and);
         Optional.ofNullable(availableNowCondition(request.onlyAvailable())).ifPresent(conditions::and);
         Optional.ofNullable(keywordCondition(request.keyword())).ifPresent(conditions::and);
         conditions.and(store.approved.eq(APPROVED));
@@ -624,13 +622,6 @@ public class StoreRepositoryImpl implements StoreRepositoryCustom {
     private BooleanExpression keywordCondition(final String keyword) {
         if (keyword != null && !keyword.isBlank()) {
             return store.name.containsIgnoreCase(keyword);
-        }
-        return null;
-    }
-
-    private BooleanExpression radiusCondition(NumberExpression<Double> distance) {
-        if (distance != null) {
-            return distance.loe(LIMIT_KM);
         }
         return null;
     }
