@@ -163,6 +163,126 @@ class StoreServiceTest {
         assertThat(store.salePrice()).isEqualTo(9000);
     }
 
+    @DisplayName("매장 리스트는 요청 좌표에서 6km 이상 떨어진 매장도 조회한다.")
+    @Test
+    void getStoreList_includesStoreOutsideSixKilometers() {
+        // given
+        Store distantStore = createStore(1, 35.1796, 129.0756);
+        storeRepository.save(distantStore);
+
+        SearchStoreListServiceRequest request = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 1, 30
+        );
+
+        // when
+        StoreListResponse result = storeService.getStoreList(request);
+
+        // then
+        assertThat(result.storeListDTOResponses())
+                .extracting(StoreListDTOResponse::storeId)
+                .containsExactly(distantStore.getId());
+        assertThat(result.storeListDTOResponses().get(0).distance()).isGreaterThan(6.0);
+    }
+
+    @DisplayName("전체 매장 조회에서도 페이지 크기만큼 매장을 반환한다.")
+    @Test
+    void getStoreList_appliesPaginationToAllStores() {
+        // given
+        Store nearbyStore = createStore(1, 37.5665, 126.9780);
+        Store distantStore = createStore(2, 35.1796, 129.0756);
+        storeRepository.saveAll(List.of(nearbyStore, distantStore));
+
+        SearchStoreListServiceRequest firstPageRequest = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 1, 1
+        );
+        SearchStoreListServiceRequest secondPageRequest = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 2, 1
+        );
+
+        // when
+        StoreListResponse firstPage = storeService.getStoreList(firstPageRequest);
+        StoreListResponse secondPage = storeService.getStoreList(secondPageRequest);
+
+        // then
+        assertThat(firstPage.storeListDTOResponses()).hasSize(1);
+        assertThat(secondPage.storeListDTOResponses()).hasSize(1);
+        assertThat(List.of(
+                firstPage.storeListDTOResponses().get(0).storeId(),
+                secondPage.storeListDTOResponses().get(0).storeId()
+        )).containsExactlyInAnyOrder(nearbyStore.getId(), distantStore.getId());
+    }
+
+    @DisplayName("기본 정렬은 판매 상태가 ON인 매장을 우선한다.")
+    @Test
+    void getStoreList_defaultSortPrioritizesSaleStatusOn() {
+        // given
+        Store openDistantStore = createStore(1, 35.1796, 129.0756, true);
+        Store closedNearbyStore = createStore(2, 37.5666, 126.9781, false);
+        storeRepository.saveAll(List.of(openDistantStore, closedNearbyStore));
+
+        SearchStoreListServiceRequest request = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 1, 30
+        );
+
+        // when
+        StoreListResponse result = storeService.getStoreList(request);
+
+        // then
+        assertThat(result.storeListDTOResponses())
+                .extracting(StoreListDTOResponse::storeId)
+                .containsExactly(openDistantStore.getId(), closedNearbyStore.getId());
+    }
+
+    @DisplayName("기본 정렬은 판매 상태가 같으면 요청 좌표에서 가까운 매장을 우선한다.")
+    @Test
+    void getStoreList_defaultSortOrdersSameSaleStatusByDistance() {
+        // given
+        Store distantStore = createStore(1, 35.1796, 129.0756);
+        Store nearbyStore = createStore(2, 37.5666, 126.9781);
+        storeRepository.saveAll(List.of(distantStore, nearbyStore));
+
+        SearchStoreListServiceRequest request = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 1, 30
+        );
+
+        // when
+        StoreListResponse result = storeService.getStoreList(request);
+
+        // then
+        assertThat(result.storeListDTOResponses())
+                .extracting(StoreListDTOResponse::storeId)
+                .containsExactly(nearbyStore.getId(), distantStore.getId());
+    }
+
+    @DisplayName("정렬값이 없는 경우와 RECENT_DESC는 동일한 기본 정렬을 사용한다.")
+    @Test
+    void getStoreList_nullAndRecentDescUseSameDefaultSort() {
+        // given
+        Store distantStore = createStore(1, 35.1796, 129.0756);
+        Store nearbyStore = createStore(2, 37.5666, 126.9781);
+        storeRepository.saveAll(List.of(distantStore, nearbyStore));
+
+        SearchStoreListServiceRequest defaultRequest = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", null, false, 1, 30
+        );
+        SearchStoreListServiceRequest recentDescRequest = new SearchStoreListServiceRequest(
+                37.5665, 126.9780, "", SearchSortType.RECENT_DESC, false, 1, 30
+        );
+
+        // when
+        StoreListResponse defaultResult = storeService.getStoreList(defaultRequest);
+        StoreListResponse recentDescResult = storeService.getStoreList(recentDescRequest);
+
+        // then
+        assertThat(defaultResult.storeListDTOResponses())
+                .extracting(StoreListDTOResponse::storeId)
+                .containsExactlyElementsOf(
+                        recentDescResult.storeListDTOResponses().stream()
+                                .map(StoreListDTOResponse::storeId)
+                                .toList()
+                );
+    }
+
     @DisplayName("매장 상세 정보를 조회한다")
     @Test
     void getStoreDetail() {
@@ -382,6 +502,14 @@ class StoreServiceTest {
     }
 
     private Store createStore(int i) {
+        return createStore(i, 37.5665, 37.5665);
+    }
+
+    private Store createStore(int i, double latitude, double longitude) {
+        return createStore(i, latitude, longitude, true);
+    }
+
+    private Store createStore(int i, double latitude, double longitude, boolean saleOn) {
         UserSocialAccountDTO userSocialAccountDTO = new UserSocialAccountDTO("test" + i + "@test.com", "테스트이름", "닉네임",
                 "01012341234",
                 ProviderType.KAKAO,
@@ -392,8 +520,8 @@ class StoreServiceTest {
         RegisterStoreDTO registerStoreDTO = new RegisterStoreDTO(
                 "테스트 매장" + i,
                 "서울 강서구 테스트 211",
-                37.5665,
-                37.5665,
+                latitude,
+                longitude,
                 "대표이름",
                 "01012345678",
                 "123491923",
@@ -424,7 +552,9 @@ class StoreServiceTest {
         goods.addStock(stock);
 
         userRepository.save(user);
-        goods.changeStatus(user, ON, LocalDateTime.of(2025, 1, 1, 8, 0));
+        if (saleOn) {
+            goods.changeStatus(user, ON, LocalDateTime.of(2025, 1, 1, 8, 0));
+        }
         return store;
     }
 

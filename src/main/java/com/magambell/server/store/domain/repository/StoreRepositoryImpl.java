@@ -62,7 +62,6 @@ import static com.querydsl.core.types.ExpressionUtils.count;
 @RequiredArgsConstructor
 public class StoreRepositoryImpl implements StoreRepositoryCustom {
 
-    private static final Integer LIMIT_KM = 6;
     private static final Double CLOSE_LIMIT_KM = 3.0;
     private final JPAQueryFactory queryFactory;
 
@@ -84,7 +83,6 @@ public class StoreRepositoryImpl implements StoreRepositoryCustom {
         }
 
         BooleanBuilder conditions = new BooleanBuilder();
-        Optional.ofNullable(radiusCondition(distance)).ifPresent(conditions::and);
         Optional.ofNullable(availableNowCondition(request.onlyAvailable())).ifPresent(conditions::and);
         Optional.ofNullable(keywordCondition(request.keyword())).ifPresent(conditions::and);
         conditions.and(store.approved.eq(APPROVED));
@@ -390,8 +388,8 @@ public class StoreRepositoryImpl implements StoreRepositoryCustom {
                 );
     }
 
-        @Override
-        public List<StoreListDTOResponse> getMapStoreList(final MapStoreListServiceRequest request) {
+    @Override
+    public List<StoreListDTOResponse> getMapStoreList(final MapStoreListServiceRequest request) {
         double minLatitude = Math.min(request.swLatitude(), request.neLatitude());
         double maxLatitude = Math.max(request.swLatitude(), request.neLatitude());
         double minLongitude = Math.min(request.swLongitude(), request.neLongitude());
@@ -400,12 +398,12 @@ public class StoreRepositoryImpl implements StoreRepositoryCustom {
         double centerLongitude = (minLongitude + maxLongitude) / 2.0;
 
         NumberExpression<Double> distance = Expressions.numberTemplate(
-            Double.class,
-            "6371 * acos(cos(radians({0})) * cos(radians({1})) * cos(radians({2}) - radians({3})) + sin(radians({0})) * sin(radians({1})))",
-            centerLatitude,
-            store.latitude,
-            centerLongitude,
-            store.longitude
+                Double.class,
+                "6371 * acos(cos(radians({0})) * cos(radians({1})) * cos(radians({2}) - radians({3})) + sin(radians({0})) * sin(radians({1})))",
+                centerLatitude,
+                store.latitude,
+                centerLongitude,
+                store.longitude
         );
 
         BooleanBuilder conditions = new BooleanBuilder();
@@ -413,52 +411,52 @@ public class StoreRepositoryImpl implements StoreRepositoryCustom {
         conditions.and(user.userStatus.eq(UserStatus.ACTIVE));
         conditions.and(store.latitude.between(minLatitude, maxLatitude));
         conditions.and(store.longitude.between(minLongitude, maxLongitude));
-    Optional.ofNullable(availableNowCondition(request.onlyAvailable())).ifPresent(conditions::and);
+        Optional.ofNullable(availableNowCondition(request.onlyAvailable())).ifPresent(conditions::and);
 
         List<Long> storeIds = queryFactory
-            .select(store.id)
-            .from(store)
-            .leftJoin(goods).on(goods.store.id.eq(store.id))
-            .innerJoin(stock).on(stock.goods.id.eq(goods.id))
-            .innerJoin(user).on(user.id.eq(store.user.id))
-            .where(conditions)
-            .groupBy(store.id)
-            .orderBy(distance.asc())
-            .fetch();
+                .select(store.id)
+                .from(store)
+                .leftJoin(goods).on(goods.store.id.eq(store.id))
+                .innerJoin(stock).on(stock.goods.id.eq(goods.id))
+                .innerJoin(user).on(user.id.eq(store.user.id))
+                .where(conditions)
+                .groupBy(store.id)
+                .orderBy(distance.asc())
+                .fetch();
 
         if (storeIds.isEmpty()) {
             return List.of();
         }
 
         return queryFactory.select(store, storeImage, goods, stock)
-            .from(store)
-            .leftJoin(storeImage).on(storeImage.store.id.eq(store.id))
-            .leftJoin(goods).on(goods.store.id.eq(store.id))
-            .innerJoin(stock).on(stock.goods.id.eq(goods.id))
-            .where(store.id.in(storeIds))
-            .orderBy(distance.asc())
-            .transform(
-                groupBy(store.id)
-                    .list(Projections.constructor(StoreListDTOResponse.class,
-                        store.id,
-                        store.name,
-                        set(storeImage.name),
-                        store.latitude,
-                        store.longitude,
-                        store.address,
-                        goods.name,
-                        goods.startTime,
-                        goods.endTime,
-                        goods.originalPrice,
-                        goods.discount,
-                        goods.salePrice,
-                        stock.quantity,
-                        distance,
-                        Expressions.nullExpression(Integer.class),
-                        goods.saleStatus
-                    ))
-            );
-        }
+                .from(store)
+                .leftJoin(storeImage).on(storeImage.store.id.eq(store.id))
+                .leftJoin(goods).on(goods.store.id.eq(store.id))
+                .innerJoin(stock).on(stock.goods.id.eq(goods.id))
+                .where(store.id.in(storeIds))
+                .orderBy(distance.asc())
+                .transform(
+                        groupBy(store.id)
+                                .list(Projections.constructor(StoreListDTOResponse.class,
+                                        store.id,
+                                        store.name,
+                                        set(storeImage.name),
+                                        store.latitude,
+                                        store.longitude,
+                                        store.address,
+                                        goods.name,
+                                        goods.startTime,
+                                        goods.endTime,
+                                        goods.originalPrice,
+                                        goods.discount,
+                                        goods.salePrice,
+                                        stock.quantity,
+                                        distance,
+                                        Expressions.nullExpression(Integer.class),
+                                        goods.saleStatus
+                                ))
+                );
+    }
 
     @Override
     public List<StoreAdminListDTO> getWaitingStoreList(final Pageable pageable) {
@@ -628,13 +626,6 @@ public class StoreRepositoryImpl implements StoreRepositoryCustom {
         return null;
     }
 
-    private BooleanExpression radiusCondition(NumberExpression<Double> distance) {
-        if (distance != null) {
-            return distance.loe(LIMIT_KM);
-        }
-        return null;
-    }
-
     private BooleanExpression availableNowCondition(Boolean onlyAvailable) {
         if (Boolean.TRUE.equals(onlyAvailable)) {
             LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Seoul"));
@@ -647,20 +638,20 @@ public class StoreRepositoryImpl implements StoreRepositoryCustom {
     }
 
     private OrderSpecifier<?>[] sortCondition(SearchSortType sortType, NumberExpression<Double> distance) {
-        long dailySeed = LocalDateTime.now(ZoneId.of("Asia/Seoul")).toLocalDate().toEpochDay();
         OrderSpecifier<Integer> openStoreFirst = new CaseBuilder()
-                .when(goods.saleStatus.eq(SaleStatus.ON).and(stock.quantity.gt(0))).then(0)
+                .when(goods.saleStatus.eq(SaleStatus.ON)).then(0)
                 .otherwise(1)
                 .asc();
-        OrderSpecifier<Double> randomOrder = Expressions
-                .numberTemplate(Double.class, "abs(sin({0} + {1}))", store.id, dailySeed)
-                .asc();
 
-        if (sortType == null) {
-            return new OrderSpecifier[]{openStoreFirst, randomOrder, store.id.desc()};
-        }
-        if (sortType == SearchSortType.RECENT_DESC) {
-            return new OrderSpecifier[]{openStoreFirst, randomOrder, store.id.desc()};
+        if (sortType == null || sortType == SearchSortType.RECENT_DESC) {
+            if (distance == null) {
+                return new OrderSpecifier[]{
+                        openStoreFirst,
+                        store.createdAt.desc().nullsLast(),
+                        store.id.desc()
+                };
+            }
+            return new OrderSpecifier[]{openStoreFirst, distance.asc(), store.id.desc()};
         }
         if (sortType == SearchSortType.DISTANCE_ASC) {
             if (distance == null) {
