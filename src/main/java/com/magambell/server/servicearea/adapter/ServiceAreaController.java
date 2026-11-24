@@ -1,6 +1,7 @@
-package com.magambell.server.servicearea;
+package com.magambell.server.servicearea.adapter;
 
 import com.magambell.server.common.Response;
+import com.magambell.server.servicearea.adapter.in.web.ServiceAreaResponse;
 import com.magambell.server.servicearea.domain.repository.ServiceAreaRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
