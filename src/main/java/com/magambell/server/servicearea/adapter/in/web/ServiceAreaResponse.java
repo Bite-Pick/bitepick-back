@@ -1,4 +1,4 @@
-package com.magambell.server.servicearea;
+package com.magambell.server.servicearea.adapter.in.web;
 
 import com.magambell.server.servicearea.domain.entity.ServiceArea;
 import io.swagger.v3.oas.annotations.media.Schema;

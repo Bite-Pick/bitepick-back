@@ -8,6 +8,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -36,4 +37,23 @@ public class ServiceArea extends BaseTimeEntity {
 
     @Column(nullable = false)
     private Boolean active = true;
+
+    @Builder(access = AccessLevel.PRIVATE)
+    private ServiceArea(String label, String name, Double latitude, Double longitude, Boolean active) {
+        this.label = label;
+        this.name = name;
+        this.latitude = latitude;
+        this.longitude = longitude;
+        this.active = active != null ? active : true;
+    }
+
+    public static ServiceArea create(String label, String name, Double latitude, Double longitude, Boolean active) {
+        return ServiceArea.builder()
+                .label(label)
+                .name(name)
+                .latitude(latitude)
+                .longitude(longitude)
+                .active(active)
+                .build();
+    }
 }

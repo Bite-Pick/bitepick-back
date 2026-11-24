@@ -7,4 +7,6 @@ import java.util.List;
 
 public interface ServiceAreaRepository extends JpaRepository<ServiceArea, Long> {
     List<ServiceArea> findByActiveTrue();
+
+    List<ServiceArea> findByActiveTrueOrderByIdAsc();
 }
